@@ -1,6 +1,7 @@
 from __future__ import annotations
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import Json
 from pydantic import UUID4
 from pydantic.types import StringConstraints
 from typing import Any
@@ -46,10 +47,26 @@ class SourcesBaseSchema(CustomModel):
 	"""Sources Base Schema."""
 
 	# Primary Keys
-	id: int
+	id: UUID4
 
 	# Columns
+	course_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime
+	source_instructions: str | None = Field(default=None)
+	url: str | None = Field(default=None)
+
+
+class UserAuthDetailsBaseSchema(CustomModel):
+	"""UserAuthDetails Base Schema."""
+
+	# Primary Keys
+	id: UUID4
+
+	# Columns
+	cookies: dict | Json | None = Field(default=None)
+	created_at: datetime.datetime
+	in_sync: bool
+	source_id: UUID4 | None = Field(default=None)
 
 
 class UserCoursesBaseSchema(CustomModel):
@@ -101,13 +118,38 @@ class SourcesInsert(CustomModelInsert):
 	"""Sources Insert Schema."""
 
 	# Primary Keys
-	
+	id: UUID4 | None = Field(default=None)  # has default value
 
 	# Field properties:
+	# course_id: nullable
 	# created_at: has default value
+	# source_instructions: nullable
+	# url: nullable
 	
 		# Optional fields
+	course_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
+	source_instructions: str | None = Field(default=None)
+	url: str | None = Field(default=None)
+
+
+class UserAuthDetailsInsert(CustomModelInsert):
+	"""UserAuthDetails Insert Schema."""
+
+	# Primary Keys
+	id: UUID4 | None = Field(default=None)  # has default value
+
+	# Field properties:
+	# cookies: nullable
+	# created_at: has default value
+	# in_sync: has default value
+	# source_id: nullable
+	
+		# Optional fields
+	cookies: dict | Json | None = Field(default=None)
+	created_at: datetime.datetime | None = Field(default=None)
+	in_sync: bool | None = Field(default=None)
+	source_id: UUID4 | None = Field(default=None)
 
 
 class UserCoursesInsert(CustomModelInsert):
@@ -171,13 +213,38 @@ class SourcesUpdate(CustomModelUpdate):
 	"""Sources Update Schema."""
 
 	# Primary Keys
-	
+	id: UUID4 | None = Field(default=None)
 
 	# Field properties:
+	# course_id: nullable
 	# created_at: has default value
+	# source_instructions: nullable
+	# url: nullable
 	
 		# Optional fields
+	course_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
+	source_instructions: str | None = Field(default=None)
+	url: str | None = Field(default=None)
+
+
+class UserAuthDetailsUpdate(CustomModelUpdate):
+	"""UserAuthDetails Update Schema."""
+
+	# Primary Keys
+	id: UUID4 | None = Field(default=None)
+
+	# Field properties:
+	# cookies: nullable
+	# created_at: has default value
+	# in_sync: has default value
+	# source_id: nullable
+	
+		# Optional fields
+	cookies: dict | Json | None = Field(default=None)
+	created_at: datetime.datetime | None = Field(default=None)
+	in_sync: bool | None = Field(default=None)
+	source_id: UUID4 | None = Field(default=None)
 
 
 class UserCoursesUpdate(CustomModelUpdate):
@@ -228,6 +295,7 @@ class Courses(CoursesBaseSchema):
 	"""
 
 	# Foreign Keys
+	sources: list[Sources] | None = Field(default=None)
 	user_courses: list[UserCourses] | None = Field(default=None)
 
 
@@ -236,7 +304,20 @@ class Sources(SourcesBaseSchema):
 
 	Inherits from SourcesBaseSchema. Add any customization here.
 	"""
-	pass
+
+	# Foreign Keys
+	courses: Courses | None = Field(default=None)
+	user_auth_details: list[UserAuthDetails] | None = Field(default=None)
+
+
+class UserAuthDetails(UserAuthDetailsBaseSchema):
+	"""UserAuthDetails Schema for Pydantic.
+
+	Inherits from UserAuthDetailsBaseSchema. Add any customization here.
+	"""
+
+	# Foreign Keys
+	sources: Sources | None = Field(default=None)
 
 
 class UserCourses(UserCoursesBaseSchema):
