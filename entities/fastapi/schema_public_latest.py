@@ -32,6 +32,18 @@ class CustomModelUpdate(CustomModel):
 # Note: These are the base Row models that include all fields.
 
 
+class AssignmentsBaseSchema(CustomModel):
+	"""Assignments Base Schema."""
+
+	# Primary Keys
+	id: UUID4
+
+	# Columns
+	chosen_due_date_id: UUID4 | None = Field(default=None)
+	course_id: UUID4 | None = Field(default=None)
+	created_at: datetime.datetime
+
+
 class CoursesBaseSchema(CustomModel):
 	"""Courses Base Schema."""
 
@@ -40,6 +52,21 @@ class CoursesBaseSchema(CustomModel):
 
 	# Columns
 	created_at: datetime.datetime
+	title: str | None = Field(default=None)
+
+
+class DueDatesBaseSchema(CustomModel):
+	"""DueDates Base Schema."""
+
+	# Primary Keys
+	id: UUID4
+
+	# Columns
+	assignment_id: UUID4 | None = Field(default=None)
+	created_at: datetime.datetime
+	date: datetime.datetime | None = Field(default=None)
+	date_certain: bool | None = Field(default=None)
+	time_certain: bool | None = Field(default=None)
 	title: str | None = Field(default=None)
 
 
@@ -54,6 +81,20 @@ class SourcesBaseSchema(CustomModel):
 	created_at: datetime.datetime
 	source_instructions: str | None = Field(default=None)
 	url: str | None = Field(default=None)
+
+
+class UserAssignmentsBaseSchema(CustomModel):
+	"""UserAssignments Base Schema."""
+
+	# Primary Keys
+	id: UUID4
+
+	# Columns
+	assignment_id: UUID4 | None = Field(default=None)
+	chosen_due_date_id: UUID4 | None = Field(default=None)
+	completed_at: datetime.datetime | None = Field(default=None)
+	created_at: datetime.datetime
+	user_id: UUID4 | None = Field(default=None)
 
 
 class UserAuthDetailsBaseSchema(CustomModel):
@@ -99,6 +140,23 @@ class UsersBaseSchema(CustomModel):
 # (like IDs and timestamps) are optional.
 
 
+class AssignmentsInsert(CustomModelInsert):
+	"""Assignments Insert Schema."""
+
+	# Primary Keys
+	id: UUID4 | None = Field(default=None)  # has default value
+
+	# Field properties:
+	# chosen_due_date_id: nullable
+	# course_id: nullable
+	# created_at: has default value
+	
+		# Optional fields
+	chosen_due_date_id: UUID4 | None = Field(default=None)
+	course_id: UUID4 | None = Field(default=None)
+	created_at: datetime.datetime | None = Field(default=None)
+
+
 class CoursesInsert(CustomModelInsert):
 	"""Courses Insert Schema."""
 
@@ -111,6 +169,29 @@ class CoursesInsert(CustomModelInsert):
 	
 		# Optional fields
 	created_at: datetime.datetime | None = Field(default=None)
+	title: str | None = Field(default=None)
+
+
+class DueDatesInsert(CustomModelInsert):
+	"""DueDates Insert Schema."""
+
+	# Primary Keys
+	id: UUID4 | None = Field(default=None)  # has default value
+
+	# Field properties:
+	# assignment_id: nullable
+	# created_at: has default value
+	# date: nullable
+	# date_certain: nullable
+	# time_certain: nullable
+	# title: nullable
+	
+		# Optional fields
+	assignment_id: UUID4 | None = Field(default=None)
+	created_at: datetime.datetime | None = Field(default=None)
+	date: datetime.datetime | None = Field(default=None)
+	date_certain: bool | None = Field(default=None)
+	time_certain: bool | None = Field(default=None)
 	title: str | None = Field(default=None)
 
 
@@ -131,6 +212,27 @@ class SourcesInsert(CustomModelInsert):
 	created_at: datetime.datetime | None = Field(default=None)
 	source_instructions: str | None = Field(default=None)
 	url: str | None = Field(default=None)
+
+
+class UserAssignmentsInsert(CustomModelInsert):
+	"""UserAssignments Insert Schema."""
+
+	# Primary Keys
+	id: UUID4 | None = Field(default=None)  # has default value
+
+	# Field properties:
+	# assignment_id: nullable
+	# chosen_due_date_id: nullable
+	# completed_at: nullable
+	# created_at: has default value
+	# user_id: nullable
+	
+		# Optional fields
+	assignment_id: UUID4 | None = Field(default=None)
+	chosen_due_date_id: UUID4 | None = Field(default=None)
+	completed_at: datetime.datetime | None = Field(default=None)
+	created_at: datetime.datetime | None = Field(default=None)
+	user_id: UUID4 | None = Field(default=None)
 
 
 class UserAuthDetailsInsert(CustomModelInsert):
@@ -194,6 +296,23 @@ class UsersInsert(CustomModelInsert):
 # Note: These models are used for update operations. All fields are optional.
 
 
+class AssignmentsUpdate(CustomModelUpdate):
+	"""Assignments Update Schema."""
+
+	# Primary Keys
+	id: UUID4 | None = Field(default=None)
+
+	# Field properties:
+	# chosen_due_date_id: nullable
+	# course_id: nullable
+	# created_at: has default value
+	
+		# Optional fields
+	chosen_due_date_id: UUID4 | None = Field(default=None)
+	course_id: UUID4 | None = Field(default=None)
+	created_at: datetime.datetime | None = Field(default=None)
+
+
 class CoursesUpdate(CustomModelUpdate):
 	"""Courses Update Schema."""
 
@@ -206,6 +325,29 @@ class CoursesUpdate(CustomModelUpdate):
 	
 		# Optional fields
 	created_at: datetime.datetime | None = Field(default=None)
+	title: str | None = Field(default=None)
+
+
+class DueDatesUpdate(CustomModelUpdate):
+	"""DueDates Update Schema."""
+
+	# Primary Keys
+	id: UUID4 | None = Field(default=None)
+
+	# Field properties:
+	# assignment_id: nullable
+	# created_at: has default value
+	# date: nullable
+	# date_certain: nullable
+	# time_certain: nullable
+	# title: nullable
+	
+		# Optional fields
+	assignment_id: UUID4 | None = Field(default=None)
+	created_at: datetime.datetime | None = Field(default=None)
+	date: datetime.datetime | None = Field(default=None)
+	date_certain: bool | None = Field(default=None)
+	time_certain: bool | None = Field(default=None)
 	title: str | None = Field(default=None)
 
 
@@ -226,6 +368,27 @@ class SourcesUpdate(CustomModelUpdate):
 	created_at: datetime.datetime | None = Field(default=None)
 	source_instructions: str | None = Field(default=None)
 	url: str | None = Field(default=None)
+
+
+class UserAssignmentsUpdate(CustomModelUpdate):
+	"""UserAssignments Update Schema."""
+
+	# Primary Keys
+	id: UUID4 | None = Field(default=None)
+
+	# Field properties:
+	# assignment_id: nullable
+	# chosen_due_date_id: nullable
+	# completed_at: nullable
+	# created_at: has default value
+	# user_id: nullable
+	
+		# Optional fields
+	assignment_id: UUID4 | None = Field(default=None)
+	chosen_due_date_id: UUID4 | None = Field(default=None)
+	completed_at: datetime.datetime | None = Field(default=None)
+	created_at: datetime.datetime | None = Field(default=None)
+	user_id: UUID4 | None = Field(default=None)
 
 
 class UserAuthDetailsUpdate(CustomModelUpdate):
@@ -288,6 +451,18 @@ class UsersUpdate(CustomModelUpdate):
 # OPERATIONAL CLASSES
 
 
+class Assignments(AssignmentsBaseSchema):
+	"""Assignments Schema for Pydantic.
+
+	Inherits from AssignmentsBaseSchema. Add any customization here.
+	"""
+
+	# Foreign Keys
+	courses: Courses | None = Field(default=None)
+	due_dates: DueDates | None = Field(default=None)
+	user_assignments: list[UserAssignments] | None = Field(default=None)
+
+
 class Courses(CoursesBaseSchema):
 	"""Courses Schema for Pydantic.
 
@@ -295,8 +470,20 @@ class Courses(CoursesBaseSchema):
 	"""
 
 	# Foreign Keys
+	assignments: list[Assignments] | None = Field(default=None)
 	sources: list[Sources] | None = Field(default=None)
 	user_courses: list[UserCourses] | None = Field(default=None)
+
+
+class DueDates(DueDatesBaseSchema):
+	"""DueDates Schema for Pydantic.
+
+	Inherits from DueDatesBaseSchema. Add any customization here.
+	"""
+
+	# Foreign Keys
+	assignments: Assignments | None = Field(default=None)
+	user_assignments: list[UserAssignments] | None = Field(default=None)
 
 
 class Sources(SourcesBaseSchema):
@@ -308,6 +495,18 @@ class Sources(SourcesBaseSchema):
 	# Foreign Keys
 	courses: Courses | None = Field(default=None)
 	user_auth_details: list[UserAuthDetails] | None = Field(default=None)
+
+
+class UserAssignments(UserAssignmentsBaseSchema):
+	"""UserAssignments Schema for Pydantic.
+
+	Inherits from UserAssignmentsBaseSchema. Add any customization here.
+	"""
+
+	# Foreign Keys
+	due_dates: DueDates | None = Field(default=None)
+	users: Users | None = Field(default=None)
+	assignments: Assignments | None = Field(default=None)
 
 
 class UserAuthDetails(UserAuthDetailsBaseSchema):
@@ -338,4 +537,5 @@ class Users(UsersBaseSchema):
 	"""
 
 	# Foreign Keys
+	user_assignments: list[UserAssignments] | None = Field(default=None)
 	user_courses: list[UserCourses] | None = Field(default=None)
