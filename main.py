@@ -131,6 +131,24 @@ class AssignmentResponse(BaseModel):
     course: CourseInfo
 
 
+class DueDate(BaseModel):
+    """Due date model for assignment due dates response."""
+
+    source_url: str | None
+    title: str | None
+    date: str | None
+    selected: bool
+
+
+class AssignmentDueDatesResponse(BaseModel):
+    """Response model for assignment due dates with pagination."""
+
+    assignment_id: UUID4
+    data: List[DueDate]
+    hasMore: bool
+    total: int
+
+
 @app.get("/")
 def read_root():
     return {"Hello": "World"}
@@ -312,7 +330,7 @@ def count_conflicting_due_dates(all_due_dates: List[dict]) -> int:
                 dd["date"].replace("Z", "+00:00")
             ).date()
             unique_dates.add(date_only)
-    return max(0, len(unique_dates) - 1)
+    return max(1, len(unique_dates))
 
 
 def get_courses_with_colors(course_ids: List[str]) -> dict:
@@ -355,6 +373,7 @@ def process_assignment(
 
     # Determine which record to use
     record_to_use = user_assignment if user_assignment else assignment
+
     is_user_assignment = bool(user_assignment)
 
     # Get chosen due date
@@ -380,7 +399,10 @@ def process_assignment(
     due_date = datetime.datetime.fromisoformat(
         chosen_due_date["date"].replace("Z", "+00:00")
     )
-    if due_date.date() <= today:
+
+    print(due_date)
+    print(today)
+    if due_date.date() < today:
         return None
 
     # Get all due dates and count conflicts
@@ -498,11 +520,13 @@ async def mark_assignment_complete(
             # Create new user_assignment record
             insert_result = (
                 supabase.table("user_assignments")
-                .insert({
-                    "assignment_id": assignment_id,
-                    "user_id": str(current_user.id),
-                    "completed_at": datetime.datetime.now().isoformat(),
-                })
+                .insert(
+                    {
+                        "assignment_id": assignment_id,
+                        "user_id": str(current_user.id),
+                        "completed_at": datetime.datetime.now().isoformat(),
+                    }
+                )
                 .execute()
             )
 
@@ -519,6 +543,115 @@ async def mark_assignment_complete(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to mark assignment as complete: {str(e)}",
+        )
+
+
+@app.get(
+    "/assignments/{assignment_id}/dates", response_model=AssignmentDueDatesResponse
+)
+async def get_assignment_due_dates(
+    assignment_id: str,
+    page: int = 1,
+    limit: int = 20,
+    current_user: Users = Depends(get_current_user),
+):
+    """Get all due dates for a specific assignment with pagination."""
+    try:
+        # Validate page and limit
+        if page < 1:
+            page = 1
+        if limit < 1 or limit > 100:
+            limit = 20
+
+        # Calculate offset
+        offset = (page - 1) * limit
+
+        # First check if the assignment exists and get its chosen_due_date_id
+        assignment_result = (
+            supabase.table("assignments")
+            .select("*, courses!course_id(*, sources!course_id(*))")
+            .eq("id", assignment_id)
+            .single()
+            .execute()
+        )
+
+        if not assignment_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found"
+            )
+
+        assignment = assignment_result.data
+        chosen_due_date_id = assignment.get("chosen_due_date_id")
+
+        # Check if user has a user_assignment override
+        user_assignment_result = (
+            supabase.table("user_assignments")
+            .select("chosen_due_date_id")
+            .eq("assignment_id", assignment_id)
+            .eq("user_id", str(current_user.id))
+            .execute()
+        )
+
+        if user_assignment_result.data:
+            # User has an override, use their chosen_due_date_id
+            chosen_due_date_id = user_assignment_result.data[0].get(
+                "chosen_due_date_id"
+            )
+
+        # Get sources from the course
+        sources = []
+        if assignment.get("courses") and assignment["courses"].get("sources"):
+            sources = assignment["courses"]["sources"]
+
+        # Create a map of source URLs (we'll use the first source URL for simplicity)
+        source_url = sources[0].get("url") if sources else None
+
+        # Get total count of due dates for this assignment
+        count_result = (
+            supabase.table("due_dates")
+            .select("*", count="exact", head=True)
+            .eq("assignment_id", assignment_id)
+            .execute()
+        )
+        total_count = count_result.count or 0
+
+        # Fetch due dates with pagination
+        due_dates_result = (
+            supabase.table("due_dates")
+            .select("*")
+            .eq("assignment_id", assignment_id)
+            .order("date", desc=False)
+            .range(offset, offset + limit - 1)
+            .execute()
+        )
+
+        # Process due dates
+        due_dates_list = []
+        for due_date in due_dates_result.data or []:
+            due_date_obj = DueDate(
+                source_url=source_url,
+                title=due_date.get("title"),
+                date=due_date.get("date"),
+                selected=(due_date["id"] == chosen_due_date_id),
+            )
+            due_dates_list.append(due_date_obj)
+
+        # Determine if there are more pages
+        has_more = offset + limit < total_count
+
+        return AssignmentDueDatesResponse(
+            assignment_id=UUID4(assignment_id),
+            data=due_dates_list,
+            hasMore=has_more,
+            total=total_count,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch assignment due dates: {str(e)}",
         )
 
 
