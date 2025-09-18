@@ -1,0 +1,198 @@
+<!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us"><head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  <!-- Enable responsiveness on mobile devices-->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+
+  <title>
+    
+      Homeworks · Distributed Systems Fundamentals
+    
+  </title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/ds1-class/public/css/poole.css">
+  <link rel="stylesheet" href="/ds1-class/public/css/syntax.css">
+  <link rel="stylesheet" href="/ds1-class/public/css/hyde.css">
+  <!-- <link rel="stylesheet" href="http://fonts.googleapis.com/css?family=PT+Sans:400,400italic,700|Abril+Fatface"> -->
+
+  <!-- Icons -->
+  <link rel="apple-touch-icon-precomposed" sizes="144x144" href="/ds1-class/public/apple-touch-icon-144-precomposed.png">
+  <link rel="shortcut icon" href="/ds1-class/public/favicon.ico">
+
+  <!-- RSS -->
+  <!-- <link rel="alternate" type="application/rss+xml" title="RSS" href="/atom.xml"> -->
+</head>
+
+  <body class="layout">  <!-- reverse -->
+    <div class="sidebar">
+  <div class="container sidebar-sticky">
+    <div class="sidebar-about">
+      <h1>Distributed Systems Fundamentals</h1>
+      <p class="lead">Columbia University Course COMS 4113</p>
+    </div>
+
+    <ul class="sidebar-nav">
+      <li class="sidebar-nav-item">
+      <a href="/ds1-class/">Overview</a>
+      </li>
+
+      
+
+      
+      
+        
+          
+            <li class="sidebar-nav-item">
+            <a href="/ds1-class/01-lectures/">Lectures</a>
+            </li>
+          
+        
+      
+        
+          
+            <li class="sidebar-nav-item active">
+            <a href="/ds1-class/02-homeworks/">Homeworks</a>
+            </li>
+          
+        
+      
+        
+          
+            <li class="sidebar-nav-item">
+            <a href="/ds1-class/03-deadlines/">Deadlines</a>
+            </li>
+          
+        
+      
+        
+          
+            <li class="sidebar-nav-item">
+            <a href="/ds1-class/04-staff/">Staff and Office Hours</a>
+            </li>
+          
+        
+      
+        
+          
+            <li class="sidebar-nav-item">
+            <a href="/ds1-class/05-resources/">Resources</a>
+            </li>
+          
+        
+      
+        
+          
+            <li class="sidebar-nav-item">
+            <a href="/ds1-class/06-faq/">FAQ 2025</a>
+            </li>
+          
+        
+      
+        
+          
+        
+      
+        
+      
+        
+          
+        
+      
+        
+          
+        
+      
+        
+      
+
+    </ul>
+
+    <!-- <p>Made with <a href="http://hyde.getpoole.com/">hyde</a>.</p> -->
+  </div>
+</div>
+
+    <div class="content container">
+      <div class="page">
+  <h1 class="page-title">Homeworks</h1>
+  <p>This course consists of a series of five heavy programming assignments.
+The first four assignments are based on those used in MIT’s distributed systems
+course (6.824) while the last assignment is developed at Columbia to complement an
+important missing component.
+All assignments are in the <a href="https://www.golang.org">Go programming language</a>.
+The series builds in stages a simple but fairly realistic, fault-tolerant,
+consistent, distributed key-value store, and then model checks a key protocol
+for it.</p>
+
+<p>Some of the assignments build off of each other, so it is <strong>critical</strong> that you
+begin them early, and have working versions of each other by the deadlines.
+The lectures cover the core concepts and protocols underlying the homeworks,
+before those homeworks are due, but not always when the homework is first
+released.  However, we do provide the necessary materials ahead of time and we
+expect you to read them and begin working on the homework <em>before</em> the topic is
+fully covered in class.</p>
+
+<p>Instructions for each homework are available within the git repository that will be set up for you following the first day of lecture (as part of HW0). A link will be distributed to you to bootstrap HW0.</p>
+
+<p>Deadlines are specified in each homework’s instructions, summarized in the
+<a href="/ds1-class/03-deadlines/">Deadlines page</a>, and available in the class calendar.</p>
+
+<p>There will be <strong>NO DEADLINE EXTENSIONS</strong> for any reason other than health conditions
+(of the student or of someone close if that impacts the student). However, there is a
+<strong>72-hour grace period</strong>, accumulated over all homeworks, for which you will not be
+downgraded.  Lateness is accounted at hour granularity (i.e., 1 second late == 1 hour late).
+Once you reach 72 hours of lateness, the next homework to incur even a one-second delay
+will be graded as <strong>ZERO</strong>. Thus, the strong recommendation is to submit on time, even
+if with an only somewhat working homework.</p>
+
+<h2 id="overview-of-the-series">Overview of the series:</h2>
+
+<ul>
+  <li><strong>Assignment 0: Collaboration Policy</strong> (not graded, but required)
+    <ul>
+      <li>Read the class policies and resources, and set up your GitHub account in the class’ GitHub Classroom.</li>
+      <li>Gets students bootstrapped into the course.</li>
+    </ul>
+  </li>
+  <li><strong>Assignment 1: MapReduce</strong>
+    <ul>
+      <li>Build a simple MapReduce library as a way to learn Go.</li>
+      <li>Introduces the most basic form of fault tolerance in distributed systems: stateless servers.</li>
+    </ul>
+  </li>
+  <li><strong>Assignment 2: Primary/Backup Server</strong>
+    <ul>
+      <li>Develop a simple key/value server that achieves fault tolerance using an in-house protocol and the primary/backup architecture.</li>
+      <li>Serves as a first step toward understanding the challenges of making stateful servers fault tolerant.</li>
+    </ul>
+  </li>
+  <li><strong>Assignment 3: Paxos</strong>
+    <ul>
+      <li>Implement a fault-tolerant key/value store based on the Paxos protocol.</li>
+      <li>Provides in-depth understanding of the protocol’s intricacies in practice, even in a simplified setting.</li>
+    </ul>
+  </li>
+  <li><strong>Assignment 4: Sharded Key/Value Server</strong>
+    <ul>
+      <li>Extend the Paxos-based store from Assignment 3 by sharding it across multiple replica groups for scalability.</li>
+      <li>Teaches a common architecture for building fault-tolerant, scalable stateful services, used in most modern storage systems (e.g., Spanner, studied in class).</li>
+    </ul>
+  </li>
+  <li><strong>Assignment 5: Model Checking Paxos</strong>
+    <ul>
+      <li>Build a bare-bones model checker, apply it to Paxos, and analyze various consensus scenarios.</li>
+      <li>Introduces the principles of formal modeling and model checking, which are increasingly important in distributed systems.</li>
+    </ul>
+  </li>
+</ul>
+
+</div>
+
+      <div id="footer" style="font-size:medium">
+</div>
+
+    </div>
+  
+
+</body></html>
