@@ -1,5 +1,5 @@
 import asyncio
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Dict, Any
 from playwright.async_api import async_playwright
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -8,6 +8,7 @@ from pathlib import Path
 import hashlib
 from urllib.parse import urljoin, urlparse
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
@@ -34,6 +35,31 @@ class Node:
         child = Node(url, self)
         self.children.append(child)
         return child
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert node to dictionary for JSON serialization"""
+        return {
+            "url": self.url,
+            "title": self.title,
+            "assignment_data_found": self.assignment_data_found,
+            "html_path": self.html_path,
+            "children": [child.to_dict() for child in self.children],
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any], parent: Optional["Node"] = None) -> "Node":
+        """Reconstruct Node from dictionary"""
+        node = cls(data["url"], parent)
+        node.title = data["title"]
+        node.assignment_data_found = data["assignment_data_found"]
+        node.html_path = data["html_path"]
+
+        # Recursively create children
+        for child_data in data["children"]:
+            child = Node.from_dict(child_data, node)
+            node.children.append(child)
+
+        return node
 
 
 class Scraper:
@@ -88,19 +114,19 @@ Current URL: {current_url}
 Webpage content:
 {markdown[:3000]}"""
 
-        response = await self.client.beta.chat.completions.parse(
+        response = await self.client.responses.parse(
             model="gpt-4o-mini",
-            messages=[
+            input=[
                 {
                     "role": "system",
                     "content": "You are analyzing a webpage to find homework/assignment related links and check for assignment data.",
                 },
                 {"role": "user", "content": prompt},
             ],
-            response_format=LinkAnalysis,
+            text_format=LinkAnalysis,
         )
 
-        result = response.choices[0].message.parsed
+        result = response.output_parsed
 
         # Resolve all relative URLs to absolute URLs
         resolved_links = []
@@ -186,6 +212,15 @@ async def main():
             print_tree(child, indent + 1)
 
     print_tree(tree)
+
+    # Export tree to JSON
+    tree_dict = tree.to_dict()
+    json_filename = "scraped_tree.json"
+
+    with open(json_filename, "w", encoding="utf-8") as f:
+        json.dump(tree_dict, f, indent=2, ensure_ascii=False)
+
+    print(f"\nTree exported to {json_filename}")
 
 
 if __name__ == "__main__":
