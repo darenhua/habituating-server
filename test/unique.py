@@ -1,39 +1,56 @@
-from openai import OpenAI
+from openai import AsyncOpenAI
 import json
 from pathlib import Path
 from markdownify import markdownify
 from typing import Dict, Any, List, Optional
 from test import Node
 from pydantic import BaseModel, Field
+from supabase import Client
 
-client = OpenAI()
+client = AsyncOpenAI()
 
 
-def process_assignment_nodes(node: Node, markdown_content: List[Dict[str, str]]):
+async def process_assignment_nodes(
+    node: Node,
+    markdown_content: List[Dict[str, str]],
+    supabase: Client = None,
+    storage_bucket: str = "scraped-html",
+):
     """Recursively process nodes and collect markdown content from assignment pages"""
     if node.assignment_data_found and node.html_path:
-        # Read HTML file
-        html_path = Path(node.html_path)
-        if html_path.exists():
-            html_content = html_path.read_text(encoding="utf-8")
+        # Read HTML from Supabase storage or local file
+        if (
+            supabase and node.html_path.startswith("/") == False
+        ):  # Storage path format: job_sync_id/hash.html
+            try:
+                # Download from Supabase storage
+                response = supabase.storage.from_(storage_bucket).download(
+                    node.html_path
+                )
+                html_content = response.decode("utf-8")
+            except Exception as e:
+                print(f"Error downloading from storage: {e}")
+                return
 
-            # Convert to markdown
-            markdown = markdownify(html_content, heading_style="closed")
+        # Convert to markdown
+        markdown = markdownify(html_content, heading_style="closed")
 
-            markdown_content.append(
-                {
-                    "url": node.url,
-                    "title": node.title,
-                    "html_path": node.html_path,
-                    "markdown": markdown,
-                }
-            )
+        markdown_content.append(
+            {
+                "url": node.url,
+                "title": node.title,
+                "html_path": node.html_path,
+                "markdown": markdown,
+            }
+        )
 
-            print(f"Processed: {node.title} ({node.url})")
+        print(f"Processed: {node.title} ({node.url})")
 
     # Process children
     for child in node.children:
-        process_assignment_nodes(child, markdown_content)
+        await process_assignment_nodes(
+            child, markdown_content, supabase, storage_bucket
+        )
 
 
 class Assignment(BaseModel):
@@ -66,21 +83,23 @@ class UniqueAssignmentsFound(BaseModel):
     # existing_assignments: List[Assignment]
 
 
-def main():
-    # Load tree from JSON
-    with open("scraped_tree.json", "r") as f:
-        tree_data = json.load(f)
-
+async def find_unique_assignments(
+    scraped_tree: Dict[str, Any], supabase: Client = None
+) -> List[Assignment]:
+    """Find unique assignments from a scraped tree structure"""
     # Reconstruct Node tree
-    root = Node.from_dict(tree_data)
+    root = Node.from_dict(scraped_tree)
+    print("ROOT", root.to_dict())
 
     # Process all nodes with assignment data
     markdown_content = []
-    process_assignment_nodes(root, markdown_content)
+    await process_assignment_nodes(root, markdown_content, supabase)
 
     assignments_found = UniqueAssignmentsFound(
         unique_assignments=[],
     )
+
+    print("HELLO", markdown_content)
 
     for content in markdown_content:
 
@@ -99,7 +118,7 @@ Here is the course website markdown:
 {content["markdown"]}
 """
 
-        response = client.responses.parse(
+        response = await client.responses.parse(
             model="gpt-5-mini",
             input=[
                 {
@@ -118,15 +137,26 @@ Here is the course website markdown:
             else:
                 print("REPEATED", assignment.title)
 
+    print(assignments_found.pretty_format())
+    return assignments_found.unique_assignments
+
+
+async def main():
+    # Load tree from JSON for testing
+    with open("scraped_tree.json", "r") as f:
+        tree_data = json.load(f)
+
+    assignments = await find_unique_assignments(tree_data)
+
     # Export assignments to JSON file
     output_path = Path("unique_assignments.json")
-    output_path.write_text(
-        assignments_found.model_dump_json(indent=2), encoding="utf-8"
-    )
+    assignments_data = {"unique_assignments": [a.model_dump() for a in assignments]}
+    output_path.write_text(json.dumps(assignments_data, indent=2), encoding="utf-8")
 
-    print(assignments_found.pretty_format())
     print(f"\nAssignments have been exported to {output_path}")
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+
+    asyncio.run(main())
