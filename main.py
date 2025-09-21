@@ -1,3 +1,5 @@
+from enum import Enum
+from math import e
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uvicorn
@@ -95,6 +97,14 @@ async def get_current_user(
 colors = ["purple", "pink", "blue", "green", "yellow", "orange", "brown"]
 
 
+class JobSyncGroupStatus(Enum):
+    STARTED = "STARTED"
+    SCRAPED_TREE = "SCRAPED_TREE"
+    UNIQUE_ASSIGNMENTS = "UNIQUE_ASSIGNMENTS"
+    ASSIGNMENT_DATES = "ASSIGNMENT_DATES"
+    COMPLETED = "COMPLETED"
+
+
 class SourceInfo(BaseModel):
     """Source information with sync status."""
 
@@ -147,6 +157,12 @@ class AssignmentDueDatesResponse(BaseModel):
     data: List[DueDate]
     hasMore: bool
     total: int
+
+
+class CourseSyncRequest(BaseModel):
+    """Request model for course sync endpoint."""
+
+    course_ids: List[UUID4]
 
 
 @app.get("/")
@@ -652,6 +668,78 @@ async def get_assignment_due_dates(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch assignment due dates: {str(e)}",
+        )
+
+
+@app.post("/sync-courses")
+async def sync_courses(
+    request: CourseSyncRequest, current_user: Users = Depends(get_current_user)
+):
+    """
+    Create a job sync group and job syncs for the specified courses.
+    For each course, finds all sources and creates job syncs.
+    """
+    try:
+        # Create a new job_sync_group
+        job_sync_group_data = {
+            "user_id": str(current_user.id)
+        }
+
+        job_sync_group_result = (
+            supabase.table("job_sync_groups")
+            .insert(job_sync_group_data)
+            .execute()
+        )
+
+        if not job_sync_group_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create job sync group",
+            )
+
+        job_sync_group_id = job_sync_group_result.data[0]["id"]
+        created_job_syncs = []
+
+        # For each course, find all sources and create job syncs
+        for course_id in request.course_ids:
+            # Get all sources for this course
+            sources_result = (
+                supabase.table("sources")
+                .select("*")
+                .eq("course_id", str(course_id))
+                .execute()
+            )
+
+            if sources_result.data:
+                # Create a job_sync for each source
+                for source in sources_result.data:
+                    job_sync_data = {
+                        "job_sync_group_id": job_sync_group_id,
+                        "course_id": str(course_id),
+                        "source_id": source["id"]
+                    }
+
+                    job_sync_result = (
+                        supabase.table("job_syncs")
+                        .insert(job_sync_data)
+                        .execute()
+                    )
+
+                    if job_sync_result.data:
+                        created_job_syncs.append(job_sync_result.data[0])
+
+        return {
+            "job_sync_group_id": job_sync_group_id,
+            "job_syncs_created": len(created_job_syncs),
+            "job_syncs": created_job_syncs,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create sync jobs: {str(e)}",
         )
 
 

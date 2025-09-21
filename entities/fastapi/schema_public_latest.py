@@ -42,6 +42,8 @@ class AssignmentsBaseSchema(CustomModel):
 	chosen_due_date_id: UUID4 | None = Field(default=None)
 	course_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime
+	description: str | None = Field(default=None)
+	title: str | None = Field(default=None)
 
 
 class CoursesBaseSchema(CustomModel):
@@ -66,8 +68,35 @@ class DueDatesBaseSchema(CustomModel):
 	created_at: datetime.datetime
 	date: datetime.datetime | None = Field(default=None)
 	date_certain: bool | None = Field(default=None)
+	description: str | None = Field(default=None)
 	time_certain: bool | None = Field(default=None)
 	title: str | None = Field(default=None)
+	url: str | None = Field(default=None)
+
+
+class JobSyncGroupsBaseSchema(CustomModel):
+	"""JobSyncGroups Base Schema."""
+
+	# Primary Keys
+	id: UUID4
+
+	# Columns
+	created_at: datetime.datetime
+	user_id: UUID4 | None = Field(default=None)
+
+
+class JobSyncsBaseSchema(CustomModel):
+	"""JobSyncs Base Schema."""
+
+	# Primary Keys
+	id: UUID4
+
+	# Columns
+	course_id: UUID4 | None = Field(default=None)
+	created_at: datetime.datetime
+	job_sync_group_id: UUID4 | None = Field(default=None)
+	scraped_tree: dict | Json | None = Field(default=None)
+	source_id: UUID4 | None = Field(default=None)
 
 
 class SourcesBaseSchema(CustomModel):
@@ -150,11 +179,15 @@ class AssignmentsInsert(CustomModelInsert):
 	# chosen_due_date_id: nullable
 	# course_id: nullable
 	# created_at: has default value
+	# description: nullable
+	# title: nullable
 	
 		# Optional fields
 	chosen_due_date_id: UUID4 | None = Field(default=None)
 	course_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
+	description: str | None = Field(default=None)
+	title: str | None = Field(default=None)
 
 
 class CoursesInsert(CustomModelInsert):
@@ -183,16 +216,56 @@ class DueDatesInsert(CustomModelInsert):
 	# created_at: has default value
 	# date: nullable
 	# date_certain: nullable
+	# description: nullable
 	# time_certain: nullable
 	# title: nullable
+	# url: nullable
 	
 		# Optional fields
 	assignment_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
 	date: datetime.datetime | None = Field(default=None)
 	date_certain: bool | None = Field(default=None)
+	description: str | None = Field(default=None)
 	time_certain: bool | None = Field(default=None)
 	title: str | None = Field(default=None)
+	url: str | None = Field(default=None)
+
+
+class JobSyncGroupsInsert(CustomModelInsert):
+	"""JobSyncGroups Insert Schema."""
+
+	# Primary Keys
+	id: UUID4 | None = Field(default=None)  # has default value
+
+	# Field properties:
+	# created_at: has default value
+	# user_id: nullable
+	
+		# Optional fields
+	created_at: datetime.datetime | None = Field(default=None)
+	user_id: UUID4 | None = Field(default=None)
+
+
+class JobSyncsInsert(CustomModelInsert):
+	"""JobSyncs Insert Schema."""
+
+	# Primary Keys
+	id: UUID4 | None = Field(default=None)  # has default value
+
+	# Field properties:
+	# course_id: nullable
+	# created_at: has default value
+	# job_sync_group_id: nullable
+	# scraped_tree: nullable
+	# source_id: nullable
+	
+		# Optional fields
+	course_id: UUID4 | None = Field(default=None)
+	created_at: datetime.datetime | None = Field(default=None)
+	job_sync_group_id: UUID4 | None = Field(default=None)
+	scraped_tree: dict | Json | None = Field(default=None)
+	source_id: UUID4 | None = Field(default=None)
 
 
 class SourcesInsert(CustomModelInsert):
@@ -306,11 +379,15 @@ class AssignmentsUpdate(CustomModelUpdate):
 	# chosen_due_date_id: nullable
 	# course_id: nullable
 	# created_at: has default value
+	# description: nullable
+	# title: nullable
 	
 		# Optional fields
 	chosen_due_date_id: UUID4 | None = Field(default=None)
 	course_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
+	description: str | None = Field(default=None)
+	title: str | None = Field(default=None)
 
 
 class CoursesUpdate(CustomModelUpdate):
@@ -339,16 +416,56 @@ class DueDatesUpdate(CustomModelUpdate):
 	# created_at: has default value
 	# date: nullable
 	# date_certain: nullable
+	# description: nullable
 	# time_certain: nullable
 	# title: nullable
+	# url: nullable
 	
 		# Optional fields
 	assignment_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
 	date: datetime.datetime | None = Field(default=None)
 	date_certain: bool | None = Field(default=None)
+	description: str | None = Field(default=None)
 	time_certain: bool | None = Field(default=None)
 	title: str | None = Field(default=None)
+	url: str | None = Field(default=None)
+
+
+class JobSyncGroupsUpdate(CustomModelUpdate):
+	"""JobSyncGroups Update Schema."""
+
+	# Primary Keys
+	id: UUID4 | None = Field(default=None)
+
+	# Field properties:
+	# created_at: has default value
+	# user_id: nullable
+	
+		# Optional fields
+	created_at: datetime.datetime | None = Field(default=None)
+	user_id: UUID4 | None = Field(default=None)
+
+
+class JobSyncsUpdate(CustomModelUpdate):
+	"""JobSyncs Update Schema."""
+
+	# Primary Keys
+	id: UUID4 | None = Field(default=None)
+
+	# Field properties:
+	# course_id: nullable
+	# created_at: has default value
+	# job_sync_group_id: nullable
+	# scraped_tree: nullable
+	# source_id: nullable
+	
+		# Optional fields
+	course_id: UUID4 | None = Field(default=None)
+	created_at: datetime.datetime | None = Field(default=None)
+	job_sync_group_id: UUID4 | None = Field(default=None)
+	scraped_tree: dict | Json | None = Field(default=None)
+	source_id: UUID4 | None = Field(default=None)
 
 
 class SourcesUpdate(CustomModelUpdate):
@@ -471,6 +588,7 @@ class Courses(CoursesBaseSchema):
 
 	# Foreign Keys
 	assignments: list[Assignments] | None = Field(default=None)
+	job_syncs: list[JobSyncs] | None = Field(default=None)
 	sources: list[Sources] | None = Field(default=None)
 	user_courses: list[UserCourses] | None = Field(default=None)
 
@@ -486,6 +604,29 @@ class DueDates(DueDatesBaseSchema):
 	user_assignments: list[UserAssignments] | None = Field(default=None)
 
 
+class JobSyncGroups(JobSyncGroupsBaseSchema):
+	"""JobSyncGroups Schema for Pydantic.
+
+	Inherits from JobSyncGroupsBaseSchema. Add any customization here.
+	"""
+
+	# Foreign Keys
+	users: Users | None = Field(default=None)
+	job_syncs: list[JobSyncs] | None = Field(default=None)
+
+
+class JobSyncs(JobSyncsBaseSchema):
+	"""JobSyncs Schema for Pydantic.
+
+	Inherits from JobSyncsBaseSchema. Add any customization here.
+	"""
+
+	# Foreign Keys
+	job_sync_groups: JobSyncGroups | None = Field(default=None)
+	sources: Sources | None = Field(default=None)
+	courses: Courses | None = Field(default=None)
+
+
 class Sources(SourcesBaseSchema):
 	"""Sources Schema for Pydantic.
 
@@ -494,6 +635,7 @@ class Sources(SourcesBaseSchema):
 
 	# Foreign Keys
 	courses: Courses | None = Field(default=None)
+	job_syncs: list[JobSyncs] | None = Field(default=None)
 	user_auth_details: list[UserAuthDetails] | None = Field(default=None)
 
 
@@ -537,5 +679,6 @@ class Users(UsersBaseSchema):
 	"""
 
 	# Foreign Keys
+	job_sync_groups: list[JobSyncGroups] | None = Field(default=None)
 	user_assignments: list[UserAssignments] | None = Field(default=None)
 	user_courses: list[UserCourses] | None = Field(default=None)
