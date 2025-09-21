@@ -2,20 +2,20 @@
   "url": "https://systems.cs.columbia.edu/ds1-class/",
   "title": "Distributed Systems Fundamentals · Columbia University Course COMS 4113",
   "assignment_data_found": true,
-  "html_path": "storage/36e99b112d8827e2a8fda0cbc4de61b4.html",
+  "html_path": "123/36e99b112d8827e2a8fda0cbc4de61b4.html",
   "children": [
     {
       "url": "https://systems.cs.columbia.edu/ds1-class/02-homeworks/",
       "title": "Homeworks · Distributed Systems Fundamentals",
       "assignment_data_found": true,
-      "html_path": "storage/c95a09d4f4af10df959e56790e209f12.html",
+      "html_path": "123/c95a09d4f4af10df959e56790e209f12.html",
       "children": []
     },
     {
       "url": "https://systems.cs.columbia.edu/ds1-class/03-deadlines/",
       "title": "Deadlines · Distributed Systems Fundamentals",
       "assignment_data_found": true,
-      "html_path": "storage/44d412c673365dcf100134f2597e642c.html",
+      "html_path": "123/44d412c673365dcf100134f2597e642c.html",
       "children": []
     }
   ]

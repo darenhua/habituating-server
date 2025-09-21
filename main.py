@@ -18,6 +18,11 @@ from typing import List
 from pydantic import UUID4
 import datetime
 from fastapi.middleware.cors import CORSMiddleware
+import asyncio
+import sys
+
+sys.path.append("./test")
+from test import Scraper
 
 load_dotenv()
 
@@ -681,14 +686,10 @@ async def sync_courses(
     """
     try:
         # Create a new job_sync_group
-        job_sync_group_data = {
-            "user_id": str(current_user.id)
-        }
+        job_sync_group_data = {"user_id": str(current_user.id)}
 
         job_sync_group_result = (
-            supabase.table("job_sync_groups")
-            .insert(job_sync_group_data)
-            .execute()
+            supabase.table("job_sync_groups").insert(job_sync_group_data).execute()
         )
 
         if not job_sync_group_result.data:
@@ -716,13 +717,11 @@ async def sync_courses(
                     job_sync_data = {
                         "job_sync_group_id": job_sync_group_id,
                         "course_id": str(course_id),
-                        "source_id": source["id"]
+                        "source_id": source["id"],
                     }
 
                     job_sync_result = (
-                        supabase.table("job_syncs")
-                        .insert(job_sync_data)
-                        .execute()
+                        supabase.table("job_syncs").insert(job_sync_data).execute()
                     )
 
                     if job_sync_result.data:
@@ -741,6 +740,141 @@ async def sync_courses(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create sync jobs: {str(e)}",
         )
+
+
+@app.post("/sync-course/{sync_job_id}/scrape")
+async def scrape_course_endpoint(
+    sync_job_id: str, current_user: Users = Depends(get_current_user)
+):
+    """
+    Scrape a course website based on the sync job ID.
+    Gets the source URL from the job_sync and updates the scraped_tree column.
+    """
+    try:
+        # Get the job_sync record to find the source
+        job_sync_result = (
+            supabase.table("job_syncs")
+            .select("*, sources!source_id(*)")
+            .eq("id", sync_job_id)
+            .single()
+            .execute()
+        )
+
+        if not job_sync_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Job sync not found"
+            )
+
+        job_sync = job_sync_result.data
+        source = job_sync.get("sources")
+
+        if not source or not source.get("url"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No source URL found for this job sync",
+            )
+
+        source_url = source["url"]
+
+        # Check if user has auth details for this source
+        # auth_details_result = (
+        #     supabase.table("user_auth_details")
+        #     .select("cookies")
+        #     .eq("source_id", job_sync["source_id"])
+        #     .single()
+        #     .execute()
+        # )
+
+        # cookies = None
+        # if auth_details_result.data and auth_details_result.data.get("cookies"):
+        #     cookies = auth_details_result.data["cookies"]
+
+        cookies = [
+            {
+                "domain": "www.gradescope.com",
+                "hostOnly": True,
+                "httpOnly": True,
+                "name": "signed_token",
+                "path": "/",
+                "sameSite": "no_restriction",
+                "secure": True,
+                "session": True,
+                "storeId": "0",
+                "value": "a1VUdGJnVzd2L0N4VmxxSHpPSFFzT2R5ZWFreHZHTFhTdnhOckYwRUp6az0tLXl2UXU4QmJBL0lxKzg5U3NNWTZwSEE9PQ%3D%3D--828dca5aabe771bda89b265a2f8d79106a0f3543",
+            },
+            {
+                "domain": "www.gradescope.com",
+                "expirationDate": 1791854981.807883,
+                "hostOnly": True,
+                "httpOnly": False,
+                "name": "remember_me",
+                "path": "/",
+                "sameSite": "no_restriction",
+                "secure": True,
+                "session": False,
+                "storeId": "0",
+                "value": "WUg4cUtWOWZZRnR1NUovamdLalJqUT09LS1UYlhHK25OVk05R2JENXpwVWxNbml3PT0%3D--07c609883c0600e60bc9abc1857c234ce1c490ee",
+            },
+            {
+                "domain": "www.gradescope.com",
+                "hostOnly": True,
+                "httpOnly": True,
+                "name": "_gradescope_session",
+                "path": "/",
+                "sameSite": "no_restriction",
+                "secure": True,
+                "session": True,
+                "storeId": "0",
+                "value": "amF5MU05VDFobGJSYU43Q1VXWTNBcFlDRjFUYnRTME91dWRFV3VCQUxKSWVtUUVSWGZweGhydCszTklHOTNKbVhHbnliM2dqSFRoaUpReGl4MTQ4bEtac0hhS0xKQTJ5cGpwNDdVUWtPenFpdEFqbTdDTkNSbUFjamh2RzZZTTFNaGhmSWlTMU04ZmoyaGhJK3dhVEpQV0ZHQ1FFOHcyQkw2ZDgzc3pHWExUUnhGU0RhU21SclFuTEl4ckFQbGFMYmNSRVNiVjZpc2FwYlRvRzhSaGo3TWtOakZ4Q0NzL0tOUVg4VkhaWm83Y1VsQVB0QU10ZjBSd2hqNW1DWDBGTkVMSkdtU2RJRGVzdkVWWDVMUm5mUjMzU21XUGdScUoyZXVmOVBKdStabW5rM0d3SFFtdnVxMTAraXNCS1R0dG5nc2tHWGVFY0dmTmZVY1dLUk5hdElzTDRweHd4N3NHQnBiN1JZNnl0NmgvalluWVJjZmtuaThTZk5wVVFmcUNvYTVkUEN1WmRsNUQveHU2V0cyVHhOblBGTzkwV3BJTk1BK2MyQkdLQjV6Y2R6WGhyNU1CVzMwMXJPZElaWnA2RS0tSXZseDVwMzdMaExwUkJzNUpxQUpCUT09--5067c60488ea3a6f00432bf45352559263c0e5a8",
+            },
+        ]
+
+        # Create scraper instance with supabase client
+        scraper = Scraper(supabase_client=supabase, job_sync_id=sync_job_id)
+
+        # Run the scraping
+        scraped_tree = await scraper.scrape_course(source_url, cookies)
+
+        # Update the job_sync with the scraped tree
+        update_result = (
+            supabase.table("job_syncs")
+            .update({"scraped_tree": scraped_tree})
+            .eq("id", sync_job_id)
+            .execute()
+        )
+
+        if not update_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update job sync with scraped data",
+            )
+
+        return {
+            "message": "Course scraped successfully",
+            "sync_job_id": sync_job_id,
+            "nodes_scraped": len(scraped_tree.get("children", [])) + 1,
+            "assignment_pages_found": sum(
+                1
+                for node in _flatten_tree(scraped_tree)
+                if node.get("assignment_data_found")
+            ),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to scrape course: {str(e)}",
+        )
+
+
+def _flatten_tree(node):
+    """Helper function to flatten tree structure for counting"""
+    nodes = [node]
+    for child in node.get("children", []):
+        nodes.extend(_flatten_tree(child))
+    return nodes
 
 
 def main():

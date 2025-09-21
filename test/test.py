@@ -9,6 +9,8 @@ import hashlib
 from urllib.parse import urljoin, urlparse
 from dotenv import load_dotenv
 import json
+from supabase import create_client, Client
+import os
 
 load_dotenv()
 
@@ -115,11 +117,12 @@ class Node:
 
 
 class Scraper:
-    def __init__(self, storage_dir: str = "storage", openai_api_key: str = None):
-        self.storage_dir = Path(storage_dir)
-        self.storage_dir.mkdir(exist_ok=True)
+    def __init__(self, supabase_client=None, job_sync_id: str = None):
+        self.supabase = supabase_client
+        self.job_sync_id = job_sync_id
         self.client = AsyncOpenAI()
         self.visited: Set[str] = set()
+        self.storage_bucket = "scraped-html"
 
     def resolve_url(self, base_url: str, link: str) -> str:
         """Resolve relative URLs to absolute URLs"""
@@ -145,11 +148,48 @@ class Scraper:
         return urljoin(base_url, link)
 
     async def save_html(self, url: str, html: str) -> str:
-        """Save HTML to storage and return file path"""
-        filename = hashlib.md5(url.encode()).hexdigest() + ".html"
-        path = self.storage_dir / filename
-        path.write_text(html)
-        return str(path)
+        """Save HTML to Supabase storage and return file path"""
+        if not self.supabase or not self.job_sync_id:
+            # Fallback to local storage for backward compatibility
+            storage_dir = Path("storage")
+            storage_dir.mkdir(exist_ok=True)
+            filename = hashlib.md5(url.encode()).hexdigest() + ".html"
+            path = storage_dir / filename
+            path.write_text(html)
+            return str(path)
+
+        filename = f"{self.job_sync_id}/{hashlib.md5(url.encode()).hexdigest()}.html"
+
+        # Convert string to bytes
+        html_bytes = html.encode("utf-8")
+
+        # Upload to Supabase storage
+        try:
+            response = self.supabase.storage.from_(self.storage_bucket).upload(
+                filename,
+                html_bytes,
+                {
+                    "content-type": "text/html",
+                    "cache-control": "3600",
+                    "upsert": "true",
+                },
+            )
+            return filename
+        except Exception as e:
+            # Try to update if file exists
+            try:
+                response = self.supabase.storage.from_(self.storage_bucket).update(
+                    filename,
+                    html_bytes,
+                    {
+                        "content-type": "text/html",
+                        "cache-control": "3600",
+                    },
+                )
+                return filename
+            except Exception as update_error:
+                print(f"Error uploading to storage: {e}, {update_error}")
+                raise
 
     async def get_relevant_links(
         self, html: str, current_url: str
@@ -196,7 +236,9 @@ Webpage content:
         title = await page.title()
         return html, title
 
-    async def build_tree(self, root_url: str) -> Node:
+    async def build_tree(
+        self, root_url: str, cookies: List[Dict[str, Any]] = None
+    ) -> Node:
         """Build tree starting from root URL using breadth-first search"""
         root = Node(root_url)
         self.visited.add(root_url)
@@ -207,7 +249,13 @@ Webpage content:
 
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=False)
-            page = await browser.new_page()
+            context = await browser.new_context()
+
+            # Add cookies if provided
+            if cookies:
+                await context.add_cookies(cookies)
+
+            page = await context.new_page()
 
             while queue:
                 current_level_nodes = []
@@ -231,9 +279,8 @@ Webpage content:
                         node.assignment_data_found = has_assignment
 
                         # Save HTML only if assignment data found
-                        if has_assignment:
-                            node.html_path = await self.save_html(node.url, html)
-                            print(f"Found assignment data at: {node.url}")
+                        node.html_path = await self.save_html(node.url, html)
+                        print(f"Found assignment data at: {node.url}")
 
                         # Add unvisited links to queue for next level
                         if current_depth < max_depth - 1:
@@ -250,9 +297,55 @@ Webpage content:
 
         return root
 
+    def clean_cookies_for_playwright(self, cookies):
+        """Convert browser-exported cookies to Playwright format"""
+        cleaned = []
+        for cookie in cookies:
+            # Create a copy to avoid modifying original
+            clean_cookie = cookie.copy()
+
+            # Handle sameSite conversion
+            if "sameSite" in clean_cookie:
+                same_site = clean_cookie["sameSite"].lower()
+                if same_site in ["unspecified", "no_restriction", ""]:
+                    # "unspecified" usually means no sameSite was set
+                    # In Playwright, omit it or use "Lax" as default
+                    del clean_cookie["sameSite"]
+                elif same_site == "none":
+                    clean_cookie["sameSite"] = "None"
+                elif same_site == "lax":
+                    clean_cookie["sameSite"] = "Lax"
+                elif same_site == "strict":
+                    clean_cookie["sameSite"] = "Strict"
+                else:
+                    # Remove invalid values
+                    del clean_cookie["sameSite"]
+
+            # Remove browser-specific fields that Playwright doesn't use
+            for field in ["hostOnly", "storeId", "session"]:
+                clean_cookie.pop(field, None)
+
+            cleaned.append(clean_cookie)
+
+        return cleaned
+
+    async def scrape_course(
+        self, source_url: str, cookies: List[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Scrape a course URL and return the tree structure as a dictionary"""
+        cookies = self.clean_cookies_for_playwright(cookies)
+        tree = await self.build_tree(source_url, cookies)
+        return tree.to_dict()
+
 
 async def main():
-    scraper = Scraper()
+    # Example usage for testing
+    SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
+
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    scraper = Scraper(supabase_client=supabase, job_sync_id="123")
     tree = await scraper.build_tree("https://systems.cs.columbia.edu/ds1-class/")
 
     # Print tree
