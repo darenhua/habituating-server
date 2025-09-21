@@ -24,7 +24,7 @@ import sys
 sys.path.append("./test")
 from test import Scraper
 from unique import find_unique_assignments, Assignment
-from due_dates import find_due_dates, get_assignments_from_db
+from due_dates import find_due_dates, get_assignments_from_db, select_best_due_date
 
 load_dotenv()
 
@@ -678,7 +678,7 @@ async def get_assignment_due_dates(
         )
 
 
-@app.post("/sync-courses")
+@app.post("/sync-course")
 async def sync_courses(
     request: CourseSyncRequest, current_user: Users = Depends(get_current_user)
 ):
@@ -896,32 +896,31 @@ async def find_assignments_endpoint(
             .single()
             .execute()
         )
-        
+
         if not job_sync_result.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Job sync not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Job sync not found"
             )
-        
+
         job_sync = job_sync_result.data
         scraped_tree = job_sync.get("scraped_tree")
         course_id = job_sync.get("course_id")
-        
+
         if not scraped_tree:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No scraped tree found. Please run scraping first."
+                detail="No scraped tree found. Please run scraping first.",
             )
-        
+
         if not course_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No course_id found for this job sync"
+                detail="No course_id found for this job sync",
             )
-        
+
         # Find unique assignments using the imported function
         assignments = await find_unique_assignments(scraped_tree, supabase)
-        
+
         # Insert assignments into database
         created_assignments = []
         for assignment in assignments:
@@ -929,35 +928,31 @@ async def find_assignments_endpoint(
                 "title": assignment.title,
                 "description": assignment.description,
                 "course_id": course_id,
-                "chosen_due_date_id": None  # NULL as requested
+                "chosen_due_date_id": None,  # NULL as requested
             }
-            
+
             try:
-                result = (
-                    supabase.table("assignments")
-                    .insert(assignment_data)
-                    .execute()
-                )
+                result = supabase.table("assignments").insert(assignment_data).execute()
                 if result.data:
                     created_assignments.extend(result.data)
             except Exception as e:
                 print(f"Error inserting assignment: {e}")
                 # Continue with other assignments even if one fails
-        
+
         return {
             "message": "Assignments found and created successfully",
             "sync_job_id": sync_job_id,
             "assignments_found": len(assignments),
             "assignments_created": len(created_assignments),
-            "assignments": created_assignments
+            "assignments": created_assignments,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to find assignments: {str(e)}"
+            detail=f"Failed to find assignments: {str(e)}",
         )
 
 
@@ -978,33 +973,32 @@ async def find_due_dates_endpoint(
             .single()
             .execute()
         )
-        
+
         if not job_sync_result.data:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Job sync not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail="Job sync not found"
             )
-        
+
         scraped_tree = job_sync_result.data.get("scraped_tree")
-        
+
         if not scraped_tree:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No scraped tree found. Please run scraping first."
+                detail="No scraped tree found. Please run scraping first.",
             )
-        
+
         # Get assignments for this job_sync_id
         assignments = await get_assignments_from_db(supabase, sync_job_id)
-        
+
         if not assignments:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="No assignments found for this job sync. Please run assignment extraction first."
+                detail="No assignments found for this job sync. Please run assignment extraction first.",
             )
-        
+
         # Find due dates
         due_dates = await find_due_dates(scraped_tree, assignments, supabase)
-        
+
         # Insert due dates into database
         created_due_dates = []
         for due_date in due_dates:
@@ -1015,36 +1009,73 @@ async def find_due_dates_endpoint(
                 "assignment_id": due_date.assignment_id,
                 "url": due_date.url,
                 "date_certain": True,  # You may want to adjust this based on your logic
-                "time_certain": False  # You may want to adjust this based on your logic
+                "time_certain": False,  # You may want to adjust this based on your logic
             }
-            
+
             try:
-                result = (
-                    supabase.table("due_dates")
-                    .insert(due_date_data)
-                    .execute()
-                )
+                result = supabase.table("due_dates").insert(due_date_data).execute()
                 if result.data:
                     created_due_dates.extend(result.data)
             except Exception as e:
                 print(f"Error inserting due date: {e}")
                 # Continue with other due dates even if one fails
-        
-        
+
+        # Group due dates by assignment and select the best one for each
+        assignments_updated = 0
+        due_dates_by_assignment = {}
+        for due_date in created_due_dates:
+            assignment_id = due_date["assignment_id"]
+            if assignment_id not in due_dates_by_assignment:
+                due_dates_by_assignment[assignment_id] = []
+            due_dates_by_assignment[assignment_id].append(due_date)
+
+        # For each assignment, select the best due date and update the assignment
+        for assignment in assignments:
+            assignment_id = assignment["id"]
+            assignment_due_dates = due_dates_by_assignment.get(assignment_id, [])
+
+            if assignment_due_dates:
+                try:
+                    # Select the best due date using AI
+                    best_due_date_id = await select_best_due_date(
+                        assignment_due_dates, assignment
+                    )
+
+                    if best_due_date_id:
+                        # Update the assignment's chosen_due_date_id
+                        update_result = (
+                            supabase.table("assignments")
+                            .update({"chosen_due_date_id": best_due_date_id})
+                            .eq("id", assignment_id)
+                            .execute()
+                        )
+
+                        if update_result.data:
+                            assignments_updated += 1
+                            print(
+                                f"Updated assignment {assignment_id} with chosen due date {best_due_date_id}"
+                            )
+
+                except Exception as e:
+                    print(
+                        f"Error selecting/updating best due date for assignment {assignment_id}: {e}"
+                    )
+
         return {
             "message": "Due dates found and created successfully",
             "sync_job_id": sync_job_id,
             "due_dates_found": len(due_dates),
             "due_dates_created": len(created_due_dates),
-            "due_dates": created_due_dates
+            "assignments_updated": assignments_updated,
+            "due_dates": created_due_dates,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to find due dates: {str(e)}"
+            detail=f"Failed to find due dates: {str(e)}",
         )
 
 

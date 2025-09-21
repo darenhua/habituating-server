@@ -4,7 +4,6 @@ from typing import List, Dict, Any
 from unique import Assignment, process_assignment_nodes
 from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
-from markdownify import markdownify as md
 import datetime
 from supabase import Client
 from test import Node
@@ -30,6 +29,11 @@ class DueDateResponse(DueDateSchema):
 
 class DueDates(BaseModel):
     due_dates: List[DueDateSchema] = Field(default_factory=list)
+
+
+class BestDueDateSelection(BaseModel):
+    selected_due_date_id: str = Field(description="The ID of the most likely due date")
+    reasoning: str = Field(description="Explanation for why this due date was selected")
 
 
 async def get_assignments_from_db(
@@ -102,13 +106,11 @@ If there are no details about the assignment on a given page, then do not output
                         date=due_date_schema.date,
                         description=due_date_schema.description,
                         assignment_id=assignment["id"],  # Use actual assignment ID
-                        url=content['url'],
+                        url=content["url"],
                     )
                     due_dates.append(due_date)
         except Exception as e:
             print(f"Error processing {content['url']}: {e}")
-
-
 
 
 async def find_due_dates(
@@ -119,20 +121,95 @@ async def find_due_dates(
 
     # Reconstruct Node tree
     root = Node.from_dict(scraped_tree)
-    
+
     # Get all markdown content from assignment pages using the imported function
     markdown_contents = []
     await process_assignment_nodes(root, markdown_contents, supabase)
-    
+
     # Process each assignment against all markdown contents
     for assignment in assignments:
         print(f"\nProcessing assignment: {assignment['title']}")
         print(f"Description: {assignment['description']}")
         print("-" * 50)
-        
+
         await process_markdown_for_due_dates(markdown_contents, assignment, due_dates)
 
     return due_dates
+
+
+async def select_best_due_date(
+    due_dates: List[Dict[str, Any]], assignment: Dict[str, Any]
+) -> str:
+    return due_dates[0]["id"]
+
+    """
+    Use OpenAI to select the most likely due date for an assignment.
+    Returns the ID of the selected due date.
+    """
+    if not due_dates:
+        return None
+
+    if len(due_dates) == 1:
+        return due_dates[0]["id"]
+
+    # Prepare due dates information for the LLM
+    due_dates_info = []
+    for i, due_date in enumerate(due_dates):
+        due_dates_info.append(
+            f"""
+Due Date Option {i+1}:
+- ID: {due_date['id']}
+- Title: {due_date['title']}
+- Date: {due_date['date']}
+- Description: {due_date['description']}
+- Source URL: {due_date['url']}
+"""
+        )
+
+    due_dates_text = "\n".join(due_dates_info)
+
+    prompt = f"""You are helping to select the most likely due date for a college assignment. 
+
+Assignment Details:
+- Title: {assignment['title']}
+- Description: {assignment['description']}
+
+I have found multiple potential due dates for this assignment from different sources. Please analyze all the options and select the one that is most likely to be the actual due date for this specific assignment.
+
+Consider factors like:
+1. How closely the due date title/description matches the assignment
+2. The reliability and specificity of the source
+3. Whether the date seems reasonable for the type of assignment
+4. Consistency with other similar assignments
+
+Due Date Options:
+{due_dates_text}
+
+Please select the most likely due date by providing its ID and your reasoning."""
+
+    try:
+        response = await client.beta.responses.parse(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert at analyzing assignment due dates and selecting the most accurate one from multiple options.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            response_format=BestDueDateSelection,
+        )
+
+        result = response.choices[0].message.parsed
+        print(f"Selected due date ID: {result.selected_due_date_id}")
+        print(f"Reasoning: {result.reasoning}")
+
+        return result.selected_due_date_id
+
+    except Exception as e:
+        print(f"Error selecting best due date: {e}")
+        # Fallback to the first due date if AI selection fails
+        return due_dates[0]["id"]
 
 
 async def main():
