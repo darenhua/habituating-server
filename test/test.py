@@ -19,6 +19,9 @@ class LinkAnalysis(BaseModel):
     reason: str
 
 
+cookies = []
+
+
 class Node:
     def __init__(self, url: str, parent: Optional["Node"] = None):
         self.url = url

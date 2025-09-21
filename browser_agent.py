@@ -4,56 +4,7 @@ from datetime import datetime
 from playwright.sync_api import sync_playwright
 import json
 
-cookies = [
-    {
-        "domain": "courseworks2.columbia.edu",
-        "hostOnly": True,
-        "httpOnly": True,
-        "name": "_legacy_normandy_session",
-        "path": "/",
-        "sameSite": "unspecified",
-        "secure": True,
-        "session": True,
-        "storeId": "0",
-        "value": "588Kut7xQ0J_uKMUwRdLoQ+cUlX_y02FiIup8Oh_t_2ZYeRNxgrZkCDgDCkokBU_9LT8kysh5a65fgcqUkxWDDs7xhECYxkgYy_ECcRI9pgeusMk0IjGfFr1iihsYfoKY_vYBi2-OTonjwDHan-Izbs4xWV4UdfnFDS0K-3EHoberFw-0J2A0rRQ2bGjaSIHfhzdDaKvqpbocf1BWFyeGvllCrPdBS3KuGV46jRLQ49WJwXiUe3JFnHUFnc_OwSwfba1kPs2HIAtp68fHHVpG0kkQUsqPsSSo933QM2IaRpZ77HWkjsYdx3ytSZ1fU03_n_c8UHS-7b8NRqpllHWedXxxB34J3fj2EMOvyXSgfBuUb4GbzrmrvjotNNV-eVh8MxcMiZ7VgUic4lg090l9YSAT7SQ96MWbkePmMwUQgSj-sObwMDM-fkmmdoT0rku8ST-UAXKnvUp4pUs6SR72NDl-BBsmUoucpraXaO4trRzgA8HSUTMizx-L2H8lxirEpMhCz6E0IFivYMTBkh39fv.D6oYLO1z8UDZ47AjNWEqYWPC_oQ.aMHbKw",
-    },
-    {
-        "domain": "courseworks2.columbia.edu",
-        "hostOnly": True,
-        "httpOnly": True,
-        "name": "log_session_id",
-        "path": "/",
-        "sameSite": "unspecified",
-        "secure": True,
-        "session": True,
-        "storeId": "0",
-        "value": "b286486543b27880130b608087b888d0",
-    },
-    {
-        "domain": "courseworks2.columbia.edu",
-        "hostOnly": True,
-        "httpOnly": True,
-        "name": "canvas_session",
-        "path": "/",
-        "sameSite": "no_restriction",
-        "secure": True,
-        "session": True,
-        "storeId": "0",
-        "value": "NaU0e69s2xgelMm5GawDHg+la0nDsvUXuPum0pZExwdmYkV3bhfNMeC7BL1cfigFxP2XgfN_AM_xhZ1ZEideMGyQBsadU-BGWSotHuy1gb4T33kGGUnWsHRmmNoGZzO8SY7Atd7r8txTPSeQA0zosy8JYD2LotYE_RtP7CPpQbaEefptjAL9zipU0IXn9E3nYp708ndcqqn-4j7TsWCHnXIb2AI9-qc_KrJ4bci0chokmputUetxS0IsnvvWF0tqFAMvruVVNZxqNbtC6QB8Tykmbhjc-QqRzNkr8H3cKodyJPr0S7-5uWTcpAYSaswfSXXsvoYZpJOvSv36iaTxUgWAm-iOVcBc8r5HKVs0tIO65QagzEyCl5tkhue8VybwPoUa4sME9omGecHIBfZvKPmKSSJmMGwTG-AAfSSqNPk_DFNLUnon6L6bi6CvV5A9N8GsWGhh0bTnHXbBGNhexLyHz4nVh3E2VyEfulMnIpTiQ.N65SwaT18Dn79bbCJtCrizZ-Sig.aMsp4A",
-    },
-    {
-        "domain": "courseworks2.columbia.edu",
-        "hostOnly": True,
-        "httpOnly": False,
-        "name": "_csrf_token",
-        "path": "/",
-        "sameSite": "unspecified",
-        "secure": True,
-        "session": True,
-        "storeId": "0",
-        "value": "Id4vrItFbnS1khbOSIb6g12VS%2BSQ0wpQ%2BtduDUVTQ5t4mXbg5BIiGtr6J%2FwtsJ%2FkEdEsl7%2BrXjabtANDIjg03g%3D%3D",
-    },
-]
+cookies = []
 
 
 class URLNode(BaseModel):
