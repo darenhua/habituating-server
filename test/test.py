@@ -19,7 +19,56 @@ class LinkAnalysis(BaseModel):
     reason: str
 
 
-cookies = []
+cookies = [
+    {
+        "domain": "courseworks2.columbia.edu",
+        "hostOnly": True,
+        "httpOnly": True,
+        "name": "_legacy_normandy_session",
+        "path": "/",
+        "sameSite": "unspecified",
+        "secure": True,
+        "session": True,
+        "storeId": "0",
+        "value": "588Kut7xQ0J_uKMUwRdLoQ+cUlX_y02FiIup8Oh_t_2ZYeRNxgrZkCDgDCkokBU_9LT8kysh5a65fgcqUkxWDDs7xhECYxkgYy_ECcRI9pgeusMk0IjGfFr1iihsYfoKY_vYBi2-OTonjwDHan-Izbs4xWV4UdfnFDS0K-3EHoberFw-0J2A0rRQ2bGjaSIHfhzdDaKvqpbocf1BWFyeGvllCrPdBS3KuGV46jRLQ49WJwXiUe3JFnHUFnc_OwSwfba1kPs2HIAtp68fHHVpG0kkQUsqPsSSo933QM2IaRpZ77HWkjsYdx3ytSZ1fU03_n_c8UHS-7b8NRqpllHWedXxxB34J3fj2EMOvyXSgfBuUb4GbzrmrvjotNNV-eVh8MxcMiZ7VgUic4lg090l9YSAT7SQ96MWbkePmMwUQgSj-sObwMDM-fkmmdoT0rku8ST-UAXKnvUp4pUs6SR72NDl-BBsmUoucpraXaO4trRzgA8HSUTMizx-L2H8lxirEpMhCz6E0IFivYMTBkh39fv.D6oYLO1z8UDZ47AjNWEqYWPC_oQ.aMHbKw",
+    },
+    {
+        "domain": "courseworks2.columbia.edu",
+        "hostOnly": True,
+        "httpOnly": True,
+        "name": "log_session_id",
+        "path": "/",
+        "sameSite": "unspecified",
+        "secure": True,
+        "session": True,
+        "storeId": "0",
+        "value": "dedc7de91b5c9ba7870192b941fb2e4f",
+    },
+    {
+        "domain": "courseworks2.columbia.edu",
+        "hostOnly": True,
+        "httpOnly": True,
+        "name": "canvas_session",
+        "path": "/",
+        "sameSite": "no_restriction",
+        "secure": True,
+        "session": True,
+        "storeId": "0",
+        "value": "eWwDT879gUl-wVT_du_8Lg+yKXHM4JmxtyQW4VszCu-nf9gk__PGr7lX6yUS8LSHtdc20B4aaJNDiSMUQhf6fBUU_zBtzQAD4mkXlzvgmjO2RmaMxiMth6F7K5KY-l-rKaNMi4-paJVNZ1-n6YTVT4vA_3wTsDHE4PBD-soqvdRtLjs3437a0K-sHiX0-gsyJDTAdL11v1zoEVMHrSwVq5032mP-2TWHQ2-ZbkOA2eqVS-ynGC7dq2z06E6vqTYhrFp6IiEvui7FrRvmTqJanodZ7uSWhg0S0ZXMsU7LbTnEooFsxOJCaIorILAEcd94l_faawecUsC5hYHoNI-TZPzV2RSb6YjgcBE7pEPsdn1OOOLDGVtbL8cLEdxHDOCMBMMCkRRWj3YSOfVW2MSpO4FGxyTXogWBiOXsxQZOEZqnly26_7kVxrWX3bPnd5jqgW_NF3Iu1Pjn4WZMaIQl3jrnD8njerzZlbFMHs9rVOAfA.Uy1egIHR12n36ahQyG3iTGI16sU.aM9X2g",
+    },
+    {
+        "domain": "courseworks2.columbia.edu",
+        "hostOnly": True,
+        "httpOnly": False,
+        "name": "_csrf_token",
+        "path": "/",
+        "sameSite": "unspecified",
+        "secure": True,
+        "session": True,
+        "storeId": "0",
+        "value": "bWF7Wu%2Bedx2H6GotaXIbPoXBf8qf07IakDXz35KkziAjEwoInNYySvCrPEcnB3UHz60Xvtiag1%2FeRMSL4pSecg%3D%3D",
+    },
+]
 
 
 class Node:
