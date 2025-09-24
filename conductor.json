@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "setup": "./conductor-setup.sh",
+    "run": "uv run uvicorn main:app --reload --host 0.0.0.0 --port $CONDUCTOR_PORT",
+    "archive": ""
+  },
+  "runScriptMode": "nonconcurrent"
+}
