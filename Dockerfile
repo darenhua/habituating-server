@@ -34,8 +34,8 @@ RUN playwright install --with-deps chromium
 # Copy application code
 COPY . .
 
-# Set environment variable for Railway port
-ENV PORT=8000
+# Railway will set the PORT environment variable
+# We don't set a default here to let Railway control it
 
-# Start the FastAPI application
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Start the FastAPI application with proper port handling
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
