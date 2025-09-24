@@ -679,14 +679,21 @@ async def get_assignment_due_dates(
 
 
 @app.post("/sync-course")
-async def sync_courses(
-    request: CourseSyncRequest, current_user: Users = Depends(get_current_user)
-):
+async def sync_courses(current_user: Users = Depends(get_current_user)):
     """
-    Create a job sync group and job syncs for the specified courses.
+    Create a job sync group and job syncs for all courses associated with the current user.
     For each course, finds all sources and creates job syncs.
     """
     try:
+        # Get all course IDs for the current user
+        course_ids = get_user_course_ids(str(current_user.id))
+
+        if not course_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No courses found for the current user",
+            )
+
         # Create a new job_sync_group
         job_sync_group_data = {"user_id": str(current_user.id)}
 
@@ -704,12 +711,12 @@ async def sync_courses(
         created_job_syncs = []
 
         # For each course, find all sources and create job syncs
-        for course_id in request.course_ids:
+        for course_id in course_ids:
             # Get all sources for this course
             sources_result = (
                 supabase.table("sources")
                 .select("*")
-                .eq("course_id", str(course_id))
+                .eq("course_id", course_id)
                 .execute()
             )
 
@@ -718,7 +725,7 @@ async def sync_courses(
                 for source in sources_result.data:
                     job_sync_data = {
                         "job_sync_group_id": job_sync_group_id,
-                        "course_id": str(course_id),
+                        "course_id": course_id,
                         "source_id": source["id"],
                     }
 
@@ -731,6 +738,7 @@ async def sync_courses(
 
         return {
             "job_sync_group_id": job_sync_group_id,
+            "courses_processed": len(course_ids),
             "job_syncs_created": len(created_job_syncs),
             "job_syncs": created_job_syncs,
         }
@@ -791,45 +799,7 @@ async def scrape_course_endpoint(
         # if auth_details_result.data and auth_details_result.data.get("cookies"):
         #     cookies = auth_details_result.data["cookies"]
 
-        cookies = [
-            {
-                "domain": "www.gradescope.com",
-                "hostOnly": True,
-                "httpOnly": True,
-                "name": "signed_token",
-                "path": "/",
-                "sameSite": "no_restriction",
-                "secure": True,
-                "session": True,
-                "storeId": "0",
-                "value": "a1VUdGJnVzd2L0N4VmxxSHpPSFFzT2R5ZWFreHZHTFhTdnhOckYwRUp6az0tLXl2UXU4QmJBL0lxKzg5U3NNWTZwSEE9PQ%3D%3D--828dca5aabe771bda89b265a2f8d79106a0f3543",
-            },
-            {
-                "domain": "www.gradescope.com",
-                "expirationDate": 1791854981.807883,
-                "hostOnly": True,
-                "httpOnly": False,
-                "name": "remember_me",
-                "path": "/",
-                "sameSite": "no_restriction",
-                "secure": True,
-                "session": False,
-                "storeId": "0",
-                "value": "WUg4cUtWOWZZRnR1NUovamdLalJqUT09LS1UYlhHK25OVk05R2JENXpwVWxNbml3PT0%3D--07c609883c0600e60bc9abc1857c234ce1c490ee",
-            },
-            {
-                "domain": "www.gradescope.com",
-                "hostOnly": True,
-                "httpOnly": True,
-                "name": "_gradescope_session",
-                "path": "/",
-                "sameSite": "no_restriction",
-                "secure": True,
-                "session": True,
-                "storeId": "0",
-                "value": "amF5MU05VDFobGJSYU43Q1VXWTNBcFlDRjFUYnRTME91dWRFV3VCQUxKSWVtUUVSWGZweGhydCszTklHOTNKbVhHbnliM2dqSFRoaUpReGl4MTQ4bEtac0hhS0xKQTJ5cGpwNDdVUWtPenFpdEFqbTdDTkNSbUFjamh2RzZZTTFNaGhmSWlTMU04ZmoyaGhJK3dhVEpQV0ZHQ1FFOHcyQkw2ZDgzc3pHWExUUnhGU0RhU21SclFuTEl4ckFQbGFMYmNSRVNiVjZpc2FwYlRvRzhSaGo3TWtOakZ4Q0NzL0tOUVg4VkhaWm83Y1VsQVB0QU10ZjBSd2hqNW1DWDBGTkVMSkdtU2RJRGVzdkVWWDVMUm5mUjMzU21XUGdScUoyZXVmOVBKdStabW5rM0d3SFFtdnVxMTAraXNCS1R0dG5nc2tHWGVFY0dmTmZVY1dLUk5hdElzTDRweHd4N3NHQnBiN1JZNnl0NmgvalluWVJjZmtuaThTZk5wVVFmcUNvYTVkUEN1WmRsNUQveHU2V0cyVHhOblBGTzkwV3BJTk1BK2MyQkdLQjV6Y2R6WGhyNU1CVzMwMXJPZElaWnA2RS0tSXZseDVwMzdMaExwUkJzNUpxQUpCUT09--5067c60488ea3a6f00432bf45352559263c0e5a8",
-            },
-        ]
+        cookies = []
 
         # Create scraper instance with supabase client
         scraper = Scraper(supabase_client=supabase, job_sync_id=sync_job_id)
@@ -929,6 +899,7 @@ async def find_assignments_endpoint(
                 "description": assignment.description,
                 "course_id": course_id,
                 "chosen_due_date_id": None,  # NULL as requested
+                "job_sync_id": sync_job_id,
             }
 
             try:
@@ -991,10 +962,14 @@ async def find_due_dates_endpoint(
         assignments = await get_assignments_from_db(supabase, sync_job_id)
 
         if not assignments:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="No assignments found for this job sync. Please run assignment extraction first.",
-            )
+            return {
+                "message": "No assignments found for this job sync",
+                "sync_job_id": sync_job_id,
+                "due_dates_found": 0,
+                "due_dates_created": 0,
+                "assignments_updated": 0,
+                "due_dates": [],
+            }
 
         # Find due dates
         due_dates = await find_due_dates(scraped_tree, assignments, supabase)
