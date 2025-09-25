@@ -22,7 +22,6 @@ load_dotenv()
 
 class LinkAnalysis(BaseModel):
     relevant_links: List[str]
-    assignment_found: bool
     reason: str
 
 class Node:
@@ -30,7 +29,7 @@ class Node:
         self.url = url
         self.parent = parent
         self.children: List["Node"] = []
-        self.assignment_data_found = False
+        # Removed assignment_data_found field
         self.html_path: Optional[str] = None
         self.title = ""
         
@@ -52,7 +51,7 @@ class Node:
         return {
             "url": self.url,
             "title": self.title,
-            "assignment_data_found": self.assignment_data_found,
+            # Removed assignment_data_found from dict
             "html_path": self.html_path,
             "content_hash": self.content_hash,
             "content_changed": self.content_changed,
@@ -65,7 +64,7 @@ class Node:
     def from_dict(cls, data: Dict[str, Any], parent: Optional["Node"] = None) -> "Node":
         node = cls(data["url"], parent)
         node.title = data.get("title", "")
-        node.assignment_data_found = data.get("assignment_data_found", False)
+        # Removed assignment_data_found loading
         node.html_path = data.get("html_path")
         
         # Load new fields
@@ -144,13 +143,11 @@ class ScraperV2:
                 print(f"Error uploading to storage: {e}, {update_error}")
                 raise
     
-    async def get_relevant_links(self, html: str, current_url: str) -> tuple[List[str], bool]:
-        """Use LLM to find relevant links and check for assignment data"""
+    async def get_relevant_links(self, html: str, current_url: str) -> List[str]:
+        """Use LLM to find relevant links"""
         markdown = markdownify(html, heading_style="closed")
         
-        prompt = f"""Given this webpage for a distributed systems class, I need to:
-1. Find links that might lead to homework/assignments
-2. Check if this page contains assignment data with due dates
+        prompt = f"""Given this webpage for a distributed systems class, find links that might lead to homework/assignments or other course content.
 
 Current URL: {current_url}
 
@@ -162,7 +159,7 @@ Webpage content:
             input=[
                 {
                     "role": "system",
-                    "content": "You are analyzing a webpage to find homework/assignment related links and check for assignment data.",
+                    "content": "You are analyzing a webpage to find relevant course-related links.",
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -177,7 +174,7 @@ Webpage content:
             if resolved:
                 resolved_links.append(resolved)
         
-        return resolved_links, result.assignment_found
+        return resolved_links
     
     async def scrape_page(self, page, url: str) -> tuple[str, str]:
         """Navigate to URL and get HTML + title"""
@@ -271,15 +268,11 @@ Webpage content:
                             node.content_changed = True
                             print(f"  + New page: {node.url}")
                         
-                        # Get relevant links and check for assignments
-                        links, has_assignment = await self.get_relevant_links(html, node.url)
-                        node.assignment_data_found = has_assignment
+                        # Get relevant links
+                        links = await self.get_relevant_links(html, node.url)
                         
-                        # Always save HTML (for due date extraction)
+                        # Always save HTML (for assignment and due date extraction)
                         node.html_path = await self.save_html(node.url, html)
-                        
-                        if has_assignment:
-                            print(f"  📋 Has assignment data")
                         
                         # Add children
                         if current_depth < max_depth - 1:
@@ -313,7 +306,7 @@ Webpage content:
         print(f"New pages: {stats['new_pages']}")
         print(f"Changed pages: {stats['changed_pages']}")
         print(f"Unchanged pages: {stats['unchanged_pages']}")
-        print(f"Pages with assignments: {stats['pages_with_assignments']}")
+        # Removed pages_with_assignments stat
         
         return tree.to_dict()
     
@@ -324,24 +317,19 @@ Webpage content:
             "new_pages": 0,
             "changed_pages": 0,
             "unchanged_pages": 0,
-            "pages_with_assignments": 0,
+            # Removed pages_with_assignments from stats
             "pages_to_process": []
         }
         
         def analyze_node(node: Node):
             stats["total_pages"] += 1
             
-            if node.assignment_data_found:
-                stats["pages_with_assignments"] += 1
-            
             if not node.previous_hash:
                 stats["new_pages"] += 1
-                if node.assignment_data_found:
-                    stats["pages_to_process"].append(node.url)
+                stats["pages_to_process"].append(node.url)
             elif node.content_changed:
                 stats["changed_pages"] += 1
-                if node.assignment_data_found:
-                    stats["pages_to_process"].append(node.url)
+                stats["pages_to_process"].append(node.url)
             else:
                 stats["unchanged_pages"] += 1
             
