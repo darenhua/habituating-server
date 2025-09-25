@@ -40,9 +40,12 @@ class AssignmentsBaseSchema(CustomModel):
 
 	# Columns
 	chosen_due_date_id: UUID4 | None = Field(default=None)
+	content_hash: str | None = Field(default=None)
 	course_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime
 	description: str | None = Field(default=None)
+	job_sync_id: UUID4 | None = Field(default=None)
+	source_page_paths: list[Any] | None = Field(default=None)
 	title: str | None = Field(default=None)
 
 
@@ -108,6 +111,7 @@ class SourcesBaseSchema(CustomModel):
 	# Columns
 	course_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime
+	needs_authentication: bool
 	source_instructions: str | None = Field(default=None)
 	url: str | None = Field(default=None)
 
@@ -134,9 +138,10 @@ class UserAuthDetailsBaseSchema(CustomModel):
 
 	# Columns
 	cookies: dict | Json | None = Field(default=None)
+	cookies_type: str | None = Field(default=None)
 	created_at: datetime.datetime
-	in_sync: bool
-	source_id: UUID4 | None = Field(default=None)
+	in_sync: bool | None = Field(default=None)
+	user_id: UUID4 | None = Field(default=None)
 
 
 class UserCoursesBaseSchema(CustomModel):
@@ -177,16 +182,22 @@ class AssignmentsInsert(CustomModelInsert):
 
 	# Field properties:
 	# chosen_due_date_id: nullable
+	# content_hash: nullable
 	# course_id: nullable
 	# created_at: has default value
 	# description: nullable
+	# job_sync_id: nullable
+	# source_page_paths: nullable, has default value
 	# title: nullable
 	
 		# Optional fields
 	chosen_due_date_id: UUID4 | None = Field(default=None)
+	content_hash: str | None = Field(default=None)
 	course_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
 	description: str | None = Field(default=None)
+	job_sync_id: UUID4 | None = Field(default=None)
+	source_page_paths: list[Any] | None = Field(default=None)
 	title: str | None = Field(default=None)
 
 
@@ -277,12 +288,14 @@ class SourcesInsert(CustomModelInsert):
 	# Field properties:
 	# course_id: nullable
 	# created_at: has default value
+	# needs_authentication: has default value
 	# source_instructions: nullable
 	# url: nullable
 	
 		# Optional fields
 	course_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
+	needs_authentication: bool | None = Field(default=None)
 	source_instructions: str | None = Field(default=None)
 	url: str | None = Field(default=None)
 
@@ -316,15 +329,17 @@ class UserAuthDetailsInsert(CustomModelInsert):
 
 	# Field properties:
 	# cookies: nullable
+	# cookies_type: nullable
 	# created_at: has default value
-	# in_sync: has default value
-	# source_id: nullable
+	# in_sync: nullable
+	# user_id: nullable
 	
 		# Optional fields
 	cookies: dict | Json | None = Field(default=None)
+	cookies_type: str | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
 	in_sync: bool | None = Field(default=None)
-	source_id: UUID4 | None = Field(default=None)
+	user_id: UUID4 | None = Field(default=None)
 
 
 class UserCoursesInsert(CustomModelInsert):
@@ -377,16 +392,22 @@ class AssignmentsUpdate(CustomModelUpdate):
 
 	# Field properties:
 	# chosen_due_date_id: nullable
+	# content_hash: nullable
 	# course_id: nullable
 	# created_at: has default value
 	# description: nullable
+	# job_sync_id: nullable
+	# source_page_paths: nullable, has default value
 	# title: nullable
 	
 		# Optional fields
 	chosen_due_date_id: UUID4 | None = Field(default=None)
+	content_hash: str | None = Field(default=None)
 	course_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
 	description: str | None = Field(default=None)
+	job_sync_id: UUID4 | None = Field(default=None)
+	source_page_paths: list[Any] | None = Field(default=None)
 	title: str | None = Field(default=None)
 
 
@@ -477,12 +498,14 @@ class SourcesUpdate(CustomModelUpdate):
 	# Field properties:
 	# course_id: nullable
 	# created_at: has default value
+	# needs_authentication: has default value
 	# source_instructions: nullable
 	# url: nullable
 	
 		# Optional fields
 	course_id: UUID4 | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
+	needs_authentication: bool | None = Field(default=None)
 	source_instructions: str | None = Field(default=None)
 	url: str | None = Field(default=None)
 
@@ -516,15 +539,17 @@ class UserAuthDetailsUpdate(CustomModelUpdate):
 
 	# Field properties:
 	# cookies: nullable
+	# cookies_type: nullable
 	# created_at: has default value
-	# in_sync: has default value
-	# source_id: nullable
+	# in_sync: nullable
+	# user_id: nullable
 	
 		# Optional fields
 	cookies: dict | Json | None = Field(default=None)
+	cookies_type: str | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
 	in_sync: bool | None = Field(default=None)
-	source_id: UUID4 | None = Field(default=None)
+	user_id: UUID4 | None = Field(default=None)
 
 
 class UserCoursesUpdate(CustomModelUpdate):
@@ -575,8 +600,9 @@ class Assignments(AssignmentsBaseSchema):
 	"""
 
 	# Foreign Keys
-	courses: Courses | None = Field(default=None)
 	due_dates: DueDates | None = Field(default=None)
+	job_syncs: JobSyncs | None = Field(default=None)
+	courses: Courses | None = Field(default=None)
 	user_assignments: list[UserAssignments] | None = Field(default=None)
 
 
@@ -622,9 +648,10 @@ class JobSyncs(JobSyncsBaseSchema):
 	"""
 
 	# Foreign Keys
-	job_sync_groups: JobSyncGroups | None = Field(default=None)
-	sources: Sources | None = Field(default=None)
 	courses: Courses | None = Field(default=None)
+	sources: Sources | None = Field(default=None)
+	job_sync_groups: JobSyncGroups | None = Field(default=None)
+	assignments: list[Assignments] | None = Field(default=None)
 
 
 class Sources(SourcesBaseSchema):
@@ -636,7 +663,6 @@ class Sources(SourcesBaseSchema):
 	# Foreign Keys
 	courses: Courses | None = Field(default=None)
 	job_syncs: list[JobSyncs] | None = Field(default=None)
-	user_auth_details: list[UserAuthDetails] | None = Field(default=None)
 
 
 class UserAssignments(UserAssignmentsBaseSchema):
@@ -646,9 +672,9 @@ class UserAssignments(UserAssignmentsBaseSchema):
 	"""
 
 	# Foreign Keys
-	due_dates: DueDates | None = Field(default=None)
-	users: Users | None = Field(default=None)
 	assignments: Assignments | None = Field(default=None)
+	users: Users | None = Field(default=None)
+	due_dates: DueDates | None = Field(default=None)
 
 
 class UserAuthDetails(UserAuthDetailsBaseSchema):
@@ -658,7 +684,7 @@ class UserAuthDetails(UserAuthDetailsBaseSchema):
 	"""
 
 	# Foreign Keys
-	sources: Sources | None = Field(default=None)
+	users: Users | None = Field(default=None)
 
 
 class UserCourses(UserCoursesBaseSchema):
@@ -668,8 +694,8 @@ class UserCourses(UserCoursesBaseSchema):
 	"""
 
 	# Foreign Keys
-	courses: Courses | None = Field(default=None)
 	users: Users | None = Field(default=None)
+	courses: Courses | None = Field(default=None)
 
 
 class Users(UsersBaseSchema):
@@ -681,4 +707,5 @@ class Users(UsersBaseSchema):
 	# Foreign Keys
 	job_sync_groups: list[JobSyncGroups] | None = Field(default=None)
 	user_assignments: list[UserAssignments] | None = Field(default=None)
+	user_auth_details: list[UserAuthDetails] | None = Field(default=None)
 	user_courses: list[UserCourses] | None = Field(default=None)

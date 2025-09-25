@@ -97,10 +97,10 @@ class CourseSyncWorkflow:
                 job_sync_ids, retry_policy
             )
 
-            # Step 6-7: Find due dates in parallel
+            # Step 6-7: Find due dates in parallel - pass assignment IDs from previous step
             workflow.logger.info("Steps 6-7: Finding due dates in parallel")
             due_date_results = await self._execute_due_date_activities(
-                job_sync_ids, retry_policy
+                job_sync_ids, assignment_results, retry_policy
             )
 
             # Calculate final results
@@ -220,15 +220,23 @@ class CourseSyncWorkflow:
     async def _execute_due_date_activities(
         self, 
         job_sync_ids: List[str], 
+        assignment_results: List[AssignmentResult],
         retry_policy: RetryPolicy
     ) -> List[DueDateResult]:
         """Execute due date finding activities in parallel for all job sync IDs."""
         tasks = []
         
+        # Create lookup for assignment IDs by job_sync_id
+        assignment_lookup = {}
+        for result in assignment_results:
+            assignment_lookup[result.job_sync_id] = result.assignment_ids or []
+        
         for job_sync_id in job_sync_ids:
+            assignment_ids = assignment_lookup.get(job_sync_id, [])
             task = workflow.execute_activity_method(
                 CourseSyncActivities.find_due_dates,
                 job_sync_id,
+                assignment_ids,
                 start_to_close_timeout=timedelta(minutes=3),
                 retry_policy=retry_policy,
             )
