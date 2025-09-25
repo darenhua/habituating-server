@@ -11,10 +11,6 @@ from pydantic import BaseModel, Field
 from markdownify import markdownify
 from supabase import Client
 from dotenv import load_dotenv
-try:
-    from services.utils.db_helpers import DbHelpers
-except ImportError:
-    from utils.db_helpers import DbHelpers
 load_dotenv()
 # Copy Assignment model from test/unique.py
 class Assignment(BaseModel):
@@ -154,14 +150,18 @@ Page content:
         print(f"\n=== Assignment Extraction ===")
         print(f"Found {len(nodes_to_process)} changed/new pages to process")
         
-        # Get ALL previous assignments for this course to provide full context
-        course_base_url = scraped_tree.get("url", "")
+        # Get course_id from job_sync to find previous assignments
+        course_id = None
+        if self.supabase:
+            job_result = self.supabase.table("job_syncs").select("course_id").eq("id", job_sync_id).execute()
+            if job_result.data:
+                course_id = job_result.data[0]["course_id"]
+        
+        # Get ALL previous assignments for this course
         all_previous_assignments = []
-        if self.supabase and course_base_url:
-            all_previous_assignments = DbHelpers.get_all_assignments_for_course(
-                self.supabase,
-                course_base_url
-            )
+        if self.supabase and course_id:
+            prev_result = self.supabase.table("assignments").select("title, description").eq("course_id", course_id).execute()
+            all_previous_assignments = prev_result.data if prev_result.data else []
             print(f"Found {len(all_previous_assignments)} previous assignments for context")
         
         # Process each changed/new page
@@ -182,7 +182,8 @@ Page content:
                     await self.handle_assignment_database_update(
                         assignment,
                         node["html_path"],
-                        job_sync_id
+                        job_sync_id,
+                        course_id
                     )
                 
                 all_assignments.extend(assignments)
@@ -197,7 +198,8 @@ Page content:
         self,
         assignment: Assignment,
         html_path: str,
-        job_sync_id: str
+        job_sync_id: str,
+        course_id: str = None
     ):
         """
         Handle database updates for assignments with source_page_paths logic
@@ -232,10 +234,10 @@ Page content:
                         print(f"    → Page path already exists for this assignment")
                 else:
                     # Create new assignment even though marked as repeated
-                    await self.create_new_assignment(assignment, html_path, job_sync_id)
+                    await self.create_new_assignment(assignment, html_path, job_sync_id, course_id)
             else:
                 # Create new assignment
-                await self.create_new_assignment(assignment, html_path, job_sync_id)
+                await self.create_new_assignment(assignment, html_path, job_sync_id, course_id)
         
         except Exception as e:
             print(f"Error updating assignment database: {e}")
@@ -263,7 +265,8 @@ Page content:
         self,
         assignment: Assignment,
         html_path: str,
-        job_sync_id: str
+        job_sync_id: str,
+        course_id: str = None
     ):
         """
         Create a new assignment with source_page_paths
@@ -275,7 +278,8 @@ Page content:
                 "content_hash": assignment.content_hash,
                 "source_url": assignment.source_url,
                 "source_page_paths": [html_path],
-                "job_sync_id": job_sync_id
+                "job_sync_id": job_sync_id,
+                "course_id": course_id
             }
             
             result = self.supabase.table("assignments").insert(assignment_data).execute()

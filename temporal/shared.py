@@ -40,6 +40,7 @@ class AssignmentResult(BaseModel):
     assignments_created: int
     success: bool
     error_message: Optional[str] = None
+    assignment_ids: Optional[List[str]] = None
 
 
 class DueDateResult(BaseModel):
