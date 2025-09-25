@@ -44,6 +44,22 @@ class DbHelpers:
         return len(result.data) > 0 if result.data else False
     
     @staticmethod
+    def get_all_assignments_for_course(supabase: Client, course_url: str) -> List[Dict]:
+        """Get all assignments for a course based on source URLs starting with course URL"""
+        try:
+            result = (
+                supabase.table("assignments")
+                .select("*")
+                .like("source_url", f"{course_url}%")
+                .execute()
+            )
+            return result.data if result.data else []
+        except Exception as e:
+            # Handle case where source_url column doesn't exist yet
+            print(f"  Database schema doesn't include source_url column yet: {e}")
+            return []
+    
+    @staticmethod
     def extract_hashes_from_tree(tree: Dict) -> Dict[str, str]:
         """Extract URL -> content_hash mapping from a tree"""
         hash_map = {}
