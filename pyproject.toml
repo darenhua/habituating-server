@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiohttp>=3.12.15",
     "fastapi>=0.104.0",
     "markdownify>=1.2.0",
     "openai>=1.108.0",
@@ -12,5 +13,6 @@ dependencies = [
     "python-dotenv>=1.1.1",
     "supabase>=2.18.1",
     "supabase-pydantic>=0.24.2",
+    "temporalio>=1.18.0",
     "uvicorn[standard]>=0.24.0",
 ]
