@@ -139,11 +139,12 @@ Page content:
         """
         all_assignments = []
         
-        # Collect all nodes with assignments
+        # Collect all nodes (no longer filtering by assignment_data_found)
         nodes_to_process = []
         
         def collect_nodes(node: Dict):
-            if node.get("assignment_data_found"):
+            # Process all nodes that have content_changed=True or are new
+            if node.get("content_changed", True):
                 nodes_to_process.append(node)
             for child in node.get("children", []):
                 collect_nodes(child)
@@ -151,7 +152,7 @@ Page content:
         collect_nodes(scraped_tree)
         
         print(f"\n=== Assignment Extraction ===")
-        print(f"Found {len(nodes_to_process)} pages with potential assignments")
+        print(f"Found {len(nodes_to_process)} changed/new pages to process")
         
         # Get ALL previous assignments for this course to provide full context
         course_base_url = scraped_tree.get("url", "")
@@ -163,38 +164,9 @@ Page content:
             )
             print(f"Found {len(all_previous_assignments)} previous assignments for context")
         
-        # Process each page
+        # Process each changed/new page
         for node in nodes_to_process:
             try:
-                # For unchanged pages, we can skip or retrieve from DB
-                if not node.get("content_changed", True):
-                    print(f"✓ Page unchanged: {node['url']}")
-                    
-                    # Try to get existing assignments from database
-                    if self.supabase:
-                        existing = DbHelpers.get_assignments_by_content_hash(
-                            self.supabase,
-                            node["content_hash"]
-                        )
-                        
-                        if existing:
-                            # Convert to Assignment objects
-                            for assignment_data in existing:
-                                assignment = Assignment(
-                                    title=assignment_data["title"],
-                                    description=assignment_data["description"],
-                                    repeated=assignment_data.get("repeated", False),
-                                    content_hash=assignment_data["content_hash"],
-                                    source_url=assignment_data.get("source_url", node["url"])
-                                )
-                                all_assignments.append(assignment)
-                            print(f"  Retrieved {len(existing)} assignments from database")
-                            continue
-                        else:
-                            print(f"  No assignments in database, re-extracting...")
-                    else:
-                        print(f"  No database connection, re-extracting...")
-                
                 print(f"↻ Processing page: {node['url']}")
                 
                 # Extract assignments using ALL course assignments for context
@@ -204,6 +176,15 @@ Page content:
                 )
                 
                 print(f"  Found {len(assignments)} assignments")
+                
+                # Handle database updates for each assignment
+                for assignment in assignments:
+                    await self.handle_assignment_database_update(
+                        assignment,
+                        node["html_path"],
+                        job_sync_id
+                    )
+                
                 all_assignments.extend(assignments)
                 
             except Exception as e:
@@ -212,3 +193,95 @@ Page content:
         print(f"\nTotal assignments found: {len(all_assignments)}")
         return all_assignments
     
+    async def handle_assignment_database_update(
+        self,
+        assignment: Assignment,
+        html_path: str,
+        job_sync_id: str
+    ):
+        """
+        Handle database updates for assignments with source_page_paths logic
+        """
+        if not self.supabase:
+            return
+        
+        try:
+            if assignment.repeated:
+                # Find existing assignment by title and description similarity
+                existing_assignment = await self.find_existing_assignment(
+                    assignment.title,
+                    assignment.description
+                )
+                
+                if existing_assignment:
+                    # Get current source_page_paths
+                    current_paths = existing_assignment.get("source_page_paths", []) or []
+                    
+                    # Add new html_path if not already present
+                    if html_path not in current_paths:
+                        updated_paths = current_paths + [html_path]
+                        
+                        # Update the assignment with new path
+                        self.supabase.table("assignments")\
+                            .update({"source_page_paths": updated_paths})\
+                            .eq("id", existing_assignment["id"])\
+                            .execute()
+                        
+                        print(f"    ✓ Updated existing assignment with new page path")
+                    else:
+                        print(f"    → Page path already exists for this assignment")
+                else:
+                    # Create new assignment even though marked as repeated
+                    await self.create_new_assignment(assignment, html_path, job_sync_id)
+            else:
+                # Create new assignment
+                await self.create_new_assignment(assignment, html_path, job_sync_id)
+        
+        except Exception as e:
+            print(f"Error updating assignment database: {e}")
+    
+    async def find_existing_assignment(self, title: str, description: str) -> Optional[Dict]:
+        """
+        Find existing assignment by title/description similarity
+        """
+        try:
+            # Simple exact match for now - could be enhanced with fuzzy matching
+            result = self.supabase.table("assignments")\
+                .select("*")\
+                .eq("title", title)\
+                .execute()
+            
+            if result.data:
+                return result.data[0]
+            
+            return None
+        except Exception as e:
+            print(f"Error finding existing assignment: {e}")
+            return None
+    
+    async def create_new_assignment(
+        self,
+        assignment: Assignment,
+        html_path: str,
+        job_sync_id: str
+    ):
+        """
+        Create a new assignment with source_page_paths
+        """
+        try:
+            assignment_data = {
+                "title": assignment.title,
+                "description": assignment.description,
+                "content_hash": assignment.content_hash,
+                "source_url": assignment.source_url,
+                "source_page_paths": [html_path],
+                "job_sync_id": job_sync_id
+            }
+            
+            result = self.supabase.table("assignments").insert(assignment_data).execute()
+            
+            if result.data:
+                print(f"    ✓ Created new assignment: {assignment.title}")
+            
+        except Exception as e:
+            print(f"Error creating new assignment: {e}")
