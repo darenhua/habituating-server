@@ -28,7 +28,6 @@ from unique import find_unique_assignments, Assignment
 from due_dates import find_due_dates, get_assignments_from_db, select_best_due_date
 from temporal.courses.workflows import CourseSyncWorkflow
 from temporal.shared import COURSE_SYNC_TASK_QUEUE_NAME, SyncPipelineInput
-from temporal.config import temporal_config
 
 load_dotenv()
 
@@ -60,7 +59,10 @@ async def get_temporal_client() -> Client:
     global _temporal_client
     if _temporal_client is None:
         _temporal_client = await Client.connect(
-            temporal_config.host, namespace=temporal_config.namespace
+            host=os.getenv("TEMPORAL_HOST"),
+            namespace=os.getenv("TEMPORAL_NAMESPACE"),
+            api_key=os.getenv("TEMPORAL_API_KEY"),
+            tls=True
         )
     return _temporal_client
 
@@ -493,7 +495,7 @@ async def get_user_assignments(current_user: Users = Depends(get_current_user)):
                 response_assignments.append(processed)
 
         # Step 6: Sort by due date
-        response_assignments.sort(key=lambda x: x.due_date)
+        response_assignments.sort(key=lambda x: (x.due_date is None, x.due_date))
 
         return response_assignments
 

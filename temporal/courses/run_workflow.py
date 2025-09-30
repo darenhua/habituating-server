@@ -31,14 +31,20 @@ from temporal.shared import COURSE_SYNC_TASK_QUEUE_NAME, SyncPipelineInput
 async def main() -> None:
     """Start the course sync workflow."""
     # Get configuration from environment
-    temporal_host = os.getenv("TEMPORAL_HOST", "localhost:7233")
-    temporal_namespace = os.getenv("TEMPORAL_NAMESPACE", "default")
+    temporal_host = os.getenv("TEMPORAL_HOST", "us-east-1.aws.api.temporal.io:7233")
+    temporal_namespace = os.getenv("TEMPORAL_NAMESPACE", "quickstart-dh3243co-1d4a40df.umyjj")
+    temporal_api_key = os.getenv("TEMPORAL_API_KEY")
 
     print(f"🚀 Starting course sync pipeline...")
     print(f"Connecting to Temporal at {temporal_host}, namespace: {temporal_namespace}")
 
     # Connect to Temporal
-    client: Client = await Client.connect(temporal_host, namespace=temporal_namespace)
+    client: Client = await Client.connect(
+        host=temporal_host,
+        namespace=temporal_namespace,
+        api_key=temporal_api_key,
+        tls=True
+    )
 
     print(f"✅ Connected to Temporal server")
 
