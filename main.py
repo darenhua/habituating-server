@@ -13,6 +13,7 @@ from entities.fastapi.schema_public_latest import (
     UserAssignmentsInsert,
 )
 from dotenv import load_dotenv
+from temporalio.client import Client
 from pydantic import BaseModel, Field
 from typing import List
 from pydantic import UUID4
@@ -25,6 +26,9 @@ sys.path.append("./test")
 from test import Scraper
 from unique import find_unique_assignments, Assignment
 from due_dates import find_due_dates, get_assignments_from_db, select_best_due_date
+from temporal.courses.workflows import CourseSyncWorkflow
+from temporal.shared import COURSE_SYNC_TASK_QUEUE_NAME, SyncPipelineInput
+from temporal.config import temporal_config
 
 load_dotenv()
 
@@ -46,6 +50,19 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Temporal client singleton
+_temporal_client = None
+
+
+async def get_temporal_client() -> Client:
+    """Get or create Temporal client."""
+    global _temporal_client
+    if _temporal_client is None:
+        _temporal_client = await Client.connect(
+            temporal_config.host, namespace=temporal_config.namespace
+        )
+    return _temporal_client
 
 
 async def get_current_user(
@@ -206,7 +223,7 @@ async def get_user_courses(current_user: Users = Depends(get_current_user)):
         # Join user_courses -> courses -> sources -> user_auth_details
         result = (
             supabase.table("user_courses")
-            .select("*, courses(*, sources(*, user_auth_details(*)))")
+            .select("*, courses(*, sources(*))")
             .eq("user_id", str(current_user.id))
             .execute()
         )
@@ -239,16 +256,9 @@ async def get_user_courses(current_user: Users = Depends(get_current_user)):
                 url = source.get("url")
 
                 # Check if any user_auth_details exist and are in sync
-                user_auth_details = source.get("user_auth_details", [])
-                synced = False
-                if user_auth_details:
-                    # Check if any auth detail is in sync
-                    synced = any(
-                        auth.get("in_sync", False) for auth in user_auth_details
-                    )
 
                 # Create SourceInfo object
-                source_info = SourceInfo(url=url, synced=synced)
+                source_info = SourceInfo(url=url, synced=True)
                 source_info_list.append(source_info)
 
             # Create CourseWithColor instance with the extracted data
@@ -1051,6 +1061,310 @@ async def find_due_dates_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to find due dates: {str(e)}",
+        )
+
+
+class CourseSyncTemporalRequest(BaseModel):
+    """Request model for Temporal course sync endpoint."""
+
+    course_ids: Optional[List[UUID4]] = None
+    force_refresh: bool = False
+
+
+class CourseSyncTemporalResponse(BaseModel):
+    """Response model for Temporal course sync initiation."""
+
+    workflow_id: str
+    status: str = "started"
+    message: str
+
+
+@app.post("/sync-courses-temporal", response_model=CourseSyncTemporalResponse)
+async def sync_courses_temporal(
+    request: CourseSyncTemporalRequest = CourseSyncTemporalRequest(),
+    current_user: Users = Depends(get_current_user),
+    temporal_client: Client = Depends(get_temporal_client),
+):
+    """
+    Trigger course synchronization using Temporal workflow.
+
+    This endpoint starts an asynchronous workflow that:
+    1. Creates sync jobs for specified courses (or all user courses)
+    2. Scrapes course websites in parallel
+    3. Finds assignments in parallel
+    4. Finds due dates in parallel
+
+    Returns immediately with workflow ID for tracking.
+    """
+    try:
+        # Convert UUID4 to strings if provided
+        course_ids_str = None
+        if request.course_ids:
+            course_ids_str = [str(course_id) for course_id in request.course_ids]
+
+        # Create workflow input
+        workflow_input = SyncPipelineInput(
+            user_id=str(current_user.id),
+            force_refresh=request.force_refresh,
+            course_ids=course_ids_str,
+        )
+
+        # Generate unique workflow ID
+        workflow_id = f"course-sync-{current_user.id}-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+
+        # Start the workflow
+        handle = await temporal_client.start_workflow(
+            CourseSyncWorkflow.run,
+            workflow_input,
+            id=workflow_id,
+            task_queue=COURSE_SYNC_TASK_QUEUE_NAME,
+        )
+
+        return CourseSyncTemporalResponse(
+            workflow_id=workflow_id,
+            status="started",
+            message=f"Course sync workflow started for {len(course_ids_str) if course_ids_str else 'all'} courses",
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start Temporal workflow: {str(e)}",
+        )
+
+
+@app.get("/sync-courses-temporal/latest-status")
+async def get_latest_job_sync_group_status(
+    current_user: Users = Depends(get_current_user),
+):
+    """
+    Get the status of the user's most recent job sync group.
+
+    Returns the current status based on the completed_at field and related metrics.
+    """
+    try:
+        # Get the most recent job sync group for the user
+        latest_group_result = (
+            supabase.table("job_sync_groups")
+            .select("*, job_syncs(*)")
+            .eq("user_id", str(current_user.id))
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if not latest_group_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No job sync groups found for the current user",
+            )
+
+        job_sync_group = latest_group_result.data[0]
+        job_sync_group_id = job_sync_group["id"]
+
+        # Check if completed
+        is_completed = job_sync_group.get("completed_at") is not None
+        job_syncs = job_sync_group.get("job_syncs", [])
+        
+        # Calculate metrics
+        if is_completed and job_syncs:
+            # Get counts from the job syncs
+            courses_scraped = len([js for js in job_syncs if js.get("scraped_tree")])
+            
+            # Get assignment counts
+            assignments_result = (
+                supabase.table("assignments")
+                .select("id", count="exact")
+                .in_("job_sync_id", [js["id"] for js in job_syncs])
+                .execute()
+            )
+            assignments_count = assignments_result.count or 0
+            
+            # Get due dates counts
+            if assignments_count > 0:
+                # First get assignment IDs
+                assignment_ids_result = (
+                    supabase.table("assignments")
+                    .select("id")
+                    .in_("job_sync_id", [js["id"] for js in job_syncs])
+                    .execute()
+                )
+                assignment_ids = (
+                    [a["id"] for a in assignment_ids_result.data]
+                    if assignment_ids_result.data
+                    else []
+                )
+                
+                if assignment_ids:
+                    due_dates_result = (
+                        supabase.table("due_dates")
+                        .select("id", count="exact")
+                        .in_("assignment_id", assignment_ids)
+                        .execute()
+                    )
+                    due_dates_count = due_dates_result.count or 0
+                else:
+                    due_dates_count = 0
+            else:
+                due_dates_count = 0
+            
+            # Calculate duration
+            created_at = datetime.datetime.fromisoformat(
+                job_sync_group["created_at"].replace("Z", "+00:00")
+            )
+            completed_at = datetime.datetime.fromisoformat(
+                job_sync_group["completed_at"].replace("Z", "+00:00")
+            )
+            duration_seconds = (completed_at - created_at).total_seconds()
+            
+            return {
+                "job_sync_group_id": job_sync_group_id,
+                "status": "completed",
+                "created_at": job_sync_group["created_at"],
+                "completed_at": job_sync_group["completed_at"],
+                "result": {
+                    "job_syncs_created": len(job_syncs),
+                    "courses_scraped": courses_scraped,
+                    "assignments_found": assignments_count,
+                    "due_dates_found": due_dates_count,
+                    "duration_seconds": duration_seconds,
+                },
+            }
+        else:
+            # Still running
+            return {
+                "job_sync_group_id": job_sync_group_id,
+                "status": "running",
+                "created_at": job_sync_group["created_at"],
+                "job_syncs_created": len(job_syncs),
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get latest job sync group status: {str(e)}",
+        )
+
+
+@app.get("/sync-courses-temporal/{job_sync_group_id}/status")
+async def get_job_sync_group_status(
+    job_sync_group_id: str,
+    current_user: Users = Depends(get_current_user),
+):
+    """
+    Get the status of a job sync group.
+
+    Returns the current status based on the completed_at field and related metrics.
+    """
+    try:
+        # Get the job sync group and verify ownership
+        group_result = (
+            supabase.table("job_sync_groups")
+            .select("*, job_syncs(*)")
+            .eq("id", job_sync_group_id)
+            .single()
+            .execute()
+        )
+
+        if not group_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Job sync group not found",
+            )
+
+        job_sync_group = group_result.data
+
+        # Verify the job sync group belongs to the current user
+        if job_sync_group.get("user_id") != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only check status of your own job sync groups",
+            )
+
+        # Check if completed
+        is_completed = job_sync_group.get("completed_at") is not None
+        job_syncs = job_sync_group.get("job_syncs", [])
+
+        # Calculate metrics
+        if is_completed and job_syncs:
+            # Get counts from the job syncs
+            courses_scraped = len([js for js in job_syncs if js.get("scraped_tree")])
+
+            # Get assignment counts
+            assignments_result = (
+                supabase.table("assignments")
+                .select("id", count="exact")
+                .in_("job_sync_id", [js["id"] for js in job_syncs])
+                .execute()
+            )
+            assignments_count = assignments_result.count or 0
+
+            # Get due dates counts
+            if assignments_count > 0:
+                # First get assignment IDs
+                assignment_ids_result = (
+                    supabase.table("assignments")
+                    .select("id")
+                    .in_("job_sync_id", [js["id"] for js in job_syncs])
+                    .execute()
+                )
+                assignment_ids = (
+                    [a["id"] for a in assignment_ids_result.data]
+                    if assignment_ids_result.data
+                    else []
+                )
+
+                if assignment_ids:
+                    due_dates_result = (
+                        supabase.table("due_dates")
+                        .select("id", count="exact")
+                        .in_("assignment_id", assignment_ids)
+                        .execute()
+                    )
+                    due_dates_count = due_dates_result.count or 0
+                else:
+                    due_dates_count = 0
+            else:
+                due_dates_count = 0
+
+            # Calculate duration
+            created_at = datetime.datetime.fromisoformat(
+                job_sync_group["created_at"].replace("Z", "+00:00")
+            )
+            completed_at = datetime.datetime.fromisoformat(
+                job_sync_group["completed_at"].replace("Z", "+00:00")
+            )
+            duration_seconds = (completed_at - created_at).total_seconds()
+
+            return {
+                "job_sync_group_id": job_sync_group_id,
+                "status": "completed",
+                "completed_at": job_sync_group["completed_at"],
+                "result": {
+                    "job_syncs_created": len(job_syncs),
+                    "courses_scraped": courses_scraped,
+                    "assignments_found": assignments_count,
+                    "due_dates_found": due_dates_count,
+                    "duration_seconds": duration_seconds,
+                },
+            }
+        else:
+            # Still running
+            return {
+                "job_sync_group_id": job_sync_group_id,
+                "status": "running",
+                "created_at": job_sync_group["created_at"],
+                "job_syncs_created": len(job_syncs),
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get job sync group status: {str(e)}",
         )
 
 
