@@ -20,6 +20,7 @@ class SyncPipelineInput(BaseModel):
 
 class JobSyncResult(BaseModel):
     """Result from creating sync jobs."""
+    job_sync_group_id: str
     job_sync_ids: List[str]
     total_created: int
 
@@ -55,6 +56,7 @@ class DueDateResult(BaseModel):
 
 class SyncPipelineResult(BaseModel):
     """Complete result from the sync pipeline."""
+    job_sync_group_id: str
     job_sync_ids: List[str]
     scrape_results: List[ScrapeResult]
     assignment_results: List[AssignmentResult]

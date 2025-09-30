@@ -84,6 +84,7 @@ class JobSyncGroupsBaseSchema(CustomModel):
 	id: UUID4
 
 	# Columns
+	completed_at: datetime.datetime | None = Field(default=None)
 	created_at: datetime.datetime
 	user_id: UUID4 | None = Field(default=None)
 
@@ -250,10 +251,12 @@ class JobSyncGroupsInsert(CustomModelInsert):
 	id: UUID4 | None = Field(default=None)  # has default value
 
 	# Field properties:
+	# completed_at: nullable
 	# created_at: has default value
 	# user_id: nullable
 	
 		# Optional fields
+	completed_at: datetime.datetime | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
 	user_id: UUID4 | None = Field(default=None)
 
@@ -460,10 +463,12 @@ class JobSyncGroupsUpdate(CustomModelUpdate):
 	id: UUID4 | None = Field(default=None)
 
 	# Field properties:
+	# completed_at: nullable
 	# created_at: has default value
 	# user_id: nullable
 	
 		# Optional fields
+	completed_at: datetime.datetime | None = Field(default=None)
 	created_at: datetime.datetime | None = Field(default=None)
 	user_id: UUID4 | None = Field(default=None)
 
@@ -600,9 +605,9 @@ class Assignments(AssignmentsBaseSchema):
 	"""
 
 	# Foreign Keys
-	due_dates: DueDates | None = Field(default=None)
-	job_syncs: JobSyncs | None = Field(default=None)
 	courses: Courses | None = Field(default=None)
+	job_syncs: JobSyncs | None = Field(default=None)
+	due_dates: DueDates | None = Field(default=None)
 	user_assignments: list[UserAssignments] | None = Field(default=None)
 
 
@@ -648,9 +653,9 @@ class JobSyncs(JobSyncsBaseSchema):
 	"""
 
 	# Foreign Keys
-	courses: Courses | None = Field(default=None)
-	sources: Sources | None = Field(default=None)
 	job_sync_groups: JobSyncGroups | None = Field(default=None)
+	sources: Sources | None = Field(default=None)
+	courses: Courses | None = Field(default=None)
 	assignments: list[Assignments] | None = Field(default=None)
 
 
@@ -672,9 +677,9 @@ class UserAssignments(UserAssignmentsBaseSchema):
 	"""
 
 	# Foreign Keys
-	assignments: Assignments | None = Field(default=None)
-	users: Users | None = Field(default=None)
 	due_dates: DueDates | None = Field(default=None)
+	users: Users | None = Field(default=None)
+	assignments: Assignments | None = Field(default=None)
 
 
 class UserAuthDetails(UserAuthDetailsBaseSchema):
@@ -694,8 +699,8 @@ class UserCourses(UserCoursesBaseSchema):
 	"""
 
 	# Foreign Keys
-	users: Users | None = Field(default=None)
 	courses: Courses | None = Field(default=None)
+	users: Users | None = Field(default=None)
 
 
 class Users(UsersBaseSchema):

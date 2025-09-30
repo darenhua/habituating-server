@@ -1,6 +1,7 @@
 """
 Enhanced scraper with content hashing and change detection
 """
+
 import asyncio
 import hashlib
 from typing import List, Optional, Set, Dict, Any
@@ -20,9 +21,11 @@ from .utils.db_helpers import DbHelpers
 
 load_dotenv()
 
+
 class LinkAnalysis(BaseModel):
     relevant_links: List[str]
     reason: str
+
 
 class Node:
     def __init__(self, url: str, parent: Optional["Node"] = None):
@@ -32,21 +35,21 @@ class Node:
         # Removed assignment_data_found field
         self.html_path: Optional[str] = None
         self.title = ""
-        
+
         # New fields for idempotency
         self.content_hash: Optional[str] = None
         self.content_changed: bool = True  # Default to true for new content
         self.previous_hash: Optional[str] = None
         self.last_scraped: Optional[str] = None
-    
+
     def is_leaf(self) -> bool:
         return len(self.children) == 0
-    
+
     def add_child(self, url: str) -> "Node":
         child = Node(url, self)
         self.children.append(child)
         return child
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "url": self.url,
@@ -59,25 +62,26 @@ class Node:
             "last_scraped": self.last_scraped,
             "children": [child.to_dict() for child in self.children],
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any], parent: Optional["Node"] = None) -> "Node":
         node = cls(data["url"], parent)
         node.title = data.get("title", "")
         # Removed assignment_data_found loading
         node.html_path = data.get("html_path")
-        
+
         # Load new fields
         node.content_hash = data.get("content_hash")
         node.content_changed = data.get("content_changed", True)
         node.previous_hash = data.get("previous_hash")
         node.last_scraped = data.get("last_scraped")
-        
+
         for child_data in data.get("children", []):
             child = Node.from_dict(child_data, node)
             node.children.append(child)
-        
+
         return node
+
 
 class ScraperV2:
     def __init__(self, supabase_client=None, job_sync_id: str = None):
@@ -87,23 +91,23 @@ class ScraperV2:
         self.visited: Set[str] = set()
         self.storage_bucket = "scraped-html"
         self.content_hasher = ContentHasher()
-    
+
     def resolve_url(self, base_url: str, link: str) -> str:
         """Resolve relative URLs to absolute URLs"""
         if not link:
             return ""
-        
+
         link = link.strip().split("#")[0]
-        
+
         if link.startswith(("http://", "https://")):
             return link
-        
+
         if link.startswith("//"):
             parsed_base = urlparse(base_url)
             return f"{parsed_base.scheme}:{link}"
-        
+
         return urljoin(base_url, link)
-    
+
     async def save_html(self, url: str, html: str) -> str:
         """Save HTML to Supabase storage and return file path"""
         if not self.supabase or not self.job_sync_id:
@@ -113,10 +117,10 @@ class ScraperV2:
             path = storage_dir / filename
             path.write_text(html)
             return str(path)
-        
+
         filename = f"{self.job_sync_id}/{hashlib.md5(url.encode()).hexdigest()}.html"
         html_bytes = html.encode("utf-8")
-        
+
         try:
             response = self.supabase.storage.from_(self.storage_bucket).upload(
                 filename,
@@ -142,18 +146,18 @@ class ScraperV2:
             except Exception as update_error:
                 print(f"Error uploading to storage: {e}, {update_error}")
                 raise
-    
+
     async def get_relevant_links(self, html: str, current_url: str) -> List[str]:
         """Use LLM to find relevant links"""
         markdown = markdownify(html, heading_style="closed")
-        
+
         prompt = f"""Given this webpage for a distributed systems class, find links that might lead to homework/assignments or other course content.
 
 Current URL: {current_url}
 
 Webpage content:
 {markdown[:3000]}"""
-        
+
         response = await self.client.responses.parse(
             model="gpt-4o-mini",
             input=[
@@ -165,30 +169,30 @@ Webpage content:
             ],
             text_format=LinkAnalysis,
         )
-        
+
         result = response.output_parsed
-        
+
         resolved_links = []
         for link in result.relevant_links:
             resolved = self.resolve_url(current_url, link)
             if resolved:
                 resolved_links.append(resolved)
-        
+
         return resolved_links
-    
+
     async def scrape_page(self, page, url: str) -> tuple[str, str]:
         """Navigate to URL and get HTML + title"""
         await page.goto(url, wait_until="networkidle", timeout=30000)
         html = await page.content()
         title = await page.title()
         return html, title
-    
+
     def clean_cookies_for_playwright(self, cookies):
         """Convert browser-exported cookies to Playwright format"""
         cleaned = []
         for cookie in cookies:
             clean_cookie = cookie.copy()
-            
+
             if "sameSite" in clean_cookie:
                 same_site = clean_cookie["sameSite"].lower()
                 if same_site in ["unspecified", "no_restriction", ""]:
@@ -201,19 +205,19 @@ Webpage content:
                     clean_cookie["sameSite"] = "Strict"
                 else:
                     del clean_cookie["sameSite"]
-            
+
             for field in ["hostOnly", "storeId", "session"]:
                 clean_cookie.pop(field, None)
-            
+
             cleaned.append(clean_cookie)
-        
+
         return cleaned
-    
+
     async def build_tree(
-        self, 
-        root_url: str, 
+        self,
+        root_url: str,
         cookies: List[Dict[str, Any]] = None,
-        previous_tree: Optional[Dict] = None
+        previous_tree: Optional[Dict] = None,
     ) -> Node:
         """
         Build tree with content hashing and change detection
@@ -222,58 +226,62 @@ Webpage content:
         if previous_tree:
             previous_hashes = DbHelpers.extract_hashes_from_tree(previous_tree)
             print(f"Found {len(previous_hashes)} pages from previous sync")
-        
+
         root = Node(root_url)
         self.visited.add(root_url)
-        
+
         queue = [(root, 0)]
         max_depth = 3
-        
+
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=False)
             context = await browser.new_context()
-            
+
             if cookies:
                 await context.add_cookies(cookies)
-            
+
             page = await context.new_page()
-            
+
             while queue:
                 current_level_nodes = []
                 current_depth = queue[0][1] if queue else 0
-                
+
                 while queue and queue[0][1] == current_depth:
                     current_level_nodes.append(queue.pop(0)[0])
-                
+
                 for node in current_level_nodes:
                     try:
                         print(f"Processing level {current_depth}: {node.url}")
                         html, title = await self.scrape_page(page, node.url)
                         node.title = title
-                        
+
                         # Generate content hash
-                        node.content_hash = self.content_hasher.generate_content_hash(html, node.url)
+                        node.content_hash = self.content_hasher.generate_content_hash(
+                            html, node.url
+                        )
                         node.last_scraped = datetime.now().isoformat()
-                        
+
                         # Check if content changed
-                        if node.url in previous_hashes:
-                            node.previous_hash = previous_hashes[node.url]
-                            node.content_changed = (node.content_hash != node.previous_hash)
-                            
-                            if not node.content_changed:
-                                print(f"  ✓ Content unchanged: {node.url}")
-                            else:
-                                print(f"  ↻ Content changed: {node.url}")
-                        else:
+                        # Check if current content hash exists in any previous hashes
+                        if not previous_hashes:
+                            node.previous_hash = None
                             node.content_changed = True
-                            print(f"  + New page: {node.url}")
-                        
+                            print(f"  + FIRST TIME SCRAPING: {node.url}")
+                        elif node.content_hash in previous_hashes.values():
+                            node.previous_hash = node.content_hash
+                            node.content_changed = False
+                            print(f"  ↻ Content unchanged from previous: {node.url}")
+                        else:
+                            node.previous_hash = None
+                            node.content_changed = True
+                            print(f"  + New unique content: {node.url}")
+
                         # Get relevant links
                         links = await self.get_relevant_links(html, node.url)
-                        
+
                         # Always save HTML (for assignment and due date extraction)
                         node.html_path = await self.save_html(node.url, html)
-                        
+
                         # Add children
                         if current_depth < max_depth - 1:
                             for link in links:
@@ -281,24 +289,24 @@ Webpage content:
                                     self.visited.add(link)
                                     child = node.add_child(link)
                                     queue.append((child, current_depth + 1))
-                    
+
                     except Exception as e:
                         print(f"Error processing {node.url}: {e}")
-            
+
             await browser.close()
-        
+
         return root
-    
+
     async def scrape_course_with_comparison(
         self,
         source_url: str,
         cookies: List[Dict[str, Any]] = None,
-        previous_tree: Optional[Dict] = None
+        previous_tree: Optional[Dict] = None,
     ) -> Dict[str, Any]:
         """Main entry point for scraping with change detection"""
         cookies = self.clean_cookies_for_playwright(cookies) if cookies else []
         tree = await self.build_tree(source_url, cookies, previous_tree)
-        
+
         # Generate summary statistics
         stats = self.generate_change_summary(tree)
         print("\n=== Scraping Summary ===")
@@ -307,9 +315,9 @@ Webpage content:
         print(f"Changed pages: {stats['changed_pages']}")
         print(f"Unchanged pages: {stats['unchanged_pages']}")
         # Removed pages_with_assignments stat
-        
+
         return tree.to_dict()
-    
+
     def generate_change_summary(self, tree: Node) -> Dict:
         """Generate summary of changes in the tree"""
         stats = {
@@ -318,12 +326,12 @@ Webpage content:
             "changed_pages": 0,
             "unchanged_pages": 0,
             # Removed pages_with_assignments from stats
-            "pages_to_process": []
+            "pages_to_process": [],
         }
-        
+
         def analyze_node(node: Node):
             stats["total_pages"] += 1
-            
+
             if not node.previous_hash:
                 stats["new_pages"] += 1
                 stats["pages_to_process"].append(node.url)
@@ -332,9 +340,9 @@ Webpage content:
                 stats["pages_to_process"].append(node.url)
             else:
                 stats["unchanged_pages"] += 1
-            
+
             for child in node.children:
                 analyze_node(child)
-        
+
         analyze_node(tree)
         return stats

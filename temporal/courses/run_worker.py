@@ -17,7 +17,7 @@ import os
 import sys
 from pathlib import Path
 
-# Add the project root to the Python path so we can import temporal modules (parent of temporal directory)
+# Add the project root to the Python path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from temporalio.client import Client
@@ -33,22 +33,19 @@ async def main() -> None:
     # Get configuration from environment
     temporal_host = os.getenv("TEMPORAL_HOST", "localhost:7233")
     temporal_namespace = os.getenv("TEMPORAL_NAMESPACE", "default")
-    
+
     print(f"Connecting to Temporal at {temporal_host}, namespace: {temporal_namespace}")
-    
+
     # Connect to Temporal
-    client: Client = await Client.connect(
-        temporal_host, 
-        namespace=temporal_namespace
-    )
-    
+    client: Client = await Client.connect(temporal_host, namespace=temporal_namespace)
+
     print(f"Connected to Temporal server")
-    
+
     # Initialize activities
     activities = CourseSyncActivities()
-    
+
     print(f"Starting worker for task queue: {COURSE_SYNC_TASK_QUEUE_NAME}")
-    
+
     # Create and run worker
     worker: Worker = Worker(
         client,
@@ -59,12 +56,13 @@ async def main() -> None:
             activities.scrape_course,
             activities.find_assignments,
             activities.find_due_dates,
+            activities.mark_job_sync_group_complete,
         ],
     )
-    
+
     print("🚀 Course sync worker started!")
     print("Press Ctrl+C to stop the worker")
-    
+
     try:
         await worker.run()
     except KeyboardInterrupt:
